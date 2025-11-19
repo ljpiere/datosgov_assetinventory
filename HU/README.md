@@ -28,5 +28,3 @@ El producto prioriza la toma de decisiones institucionales a partir del inventar
 - **Actividad PS:** Revisar cobertura sectorial → HU-01, HU-02, HU-08, HU-09.
 - **Actividad GDA:** Monitorear calidad y actualización → HU-03, HU-04, HU-05, HU-10.
 - **Actividad CI:** Elaborar informes → HU-06, HU-07.
-
-Este set garantiza trazabilidad entre las necesidades institucionales (OE1-OE3) y los componentes implementados en la aplicación.

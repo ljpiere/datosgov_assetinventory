@@ -245,7 +245,7 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
     clusters = min(n_clusters, corpus.nunique(), 10)
     vectorizer = TfidfVectorizer(max_features=1500, ngram_range=(1, 2))
     matrix = vectorizer.fit_transform(corpus)
-    km = KMeans(n_clusters=clusters, random_state=42, n_init="auto")
+    km = KMeans(n_clusters=clusters, random_state=42, n_init="auto").fit(matrix)
     labels = pd.Series(km.labels_, index=corpus.index, name="cluster_id")
     df.loc[labels.index, "cluster_id"] = labels
 

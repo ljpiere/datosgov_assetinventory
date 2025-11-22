@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+import re
 
 try:
     from sklearn.cluster import KMeans
@@ -51,6 +52,45 @@ DATE_COLUMNS = {
     "Common Core: Last Update",
 }
 
+# Lista breve de stopwords en español para la búsqueda aproximada y clustering
+STOP_WORDS_ES = [
+    "de",
+    "la",
+    "el",
+    "en",
+    "y",
+    "a",
+    "los",
+    "del",
+    "por",
+    "para",
+    "con",
+    "un",
+    "una",
+    "las",
+    "se",
+    "que",
+    "al",
+    "su",
+    "sobre",
+    "lo",
+    "como",
+    "datos",
+    "informacion",
+    "información",
+    "datos obligatorios",
+    "obligatorios",
+    "activo",
+    "activos",
+    "div",
+    "span",
+    "style",
+    "font",
+    "http",
+    "https",
+    "www",
+]
+
 
 def load_inventory(path: Path = DATA_PATH) -> pd.DataFrame:
     """Carga el inventario y aplica enriquecimiento."""
@@ -58,6 +98,7 @@ def load_inventory(path: Path = DATA_PATH) -> pd.DataFrame:
         path,
         na_values=["", " ", "NA", "N/A", "-", "null", "None"],
         keep_default_na=True,
+        low_memory=False,  # evita DtypeWarning por columnas mixtas
     )
     df = enrich_inventory(df)
     return df
@@ -70,7 +111,13 @@ def enrich_inventory(df: pd.DataFrame) -> pd.DataFrame:
 
     for col in DATE_COLUMNS:
         if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+            # Se usa format="mixed" para silenciar advertencias al inferir fechas heterogéneas
+            df[col] = pd.to_datetime(
+                df[col],
+                errors="coerce",
+                format="mixed",
+                utc=True,  # evita FutureWarning por zonas horarias mezcladas
+            )
 
     df["is_public"] = df["Público"].str.lower().eq("public")
     df["public_access_level"] = (
@@ -171,7 +218,9 @@ def completeness_by_entity(df: pd.DataFrame) -> pd.DataFrame:
 
 def frequency_distribution(df: pd.DataFrame) -> pd.DataFrame:
     return (
-        df.groupby(["update_frequency_norm", "freshness_bucket"])
+        df.groupby(
+            ["update_frequency_norm", "freshness_bucket"], observed=False
+        )  # observed=False mantiene comportamiento actual y silencia FutureWarning
         .size()
         .reset_index(name="assets")
     )
@@ -230,7 +279,10 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
         + df["Descripción"].fillna("")
         + " "
         + df["Etiqueta"].fillna("")
-    )
+    ).str.lower()
+    text = text.str.replace(r"<[^>]+>", " ", regex=True)
+    text = text.str.replace(r"&nbsp;", " ", regex=True)
+    text = text.str.replace(r"\s+", " ", regex=True)
     valid_idx = text.str.strip().ne("")
     corpus = text[valid_idx]
     if corpus.empty:
@@ -243,13 +295,15 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
         )
 
     clusters = min(n_clusters, corpus.nunique(), 10)
-    vectorizer = TfidfVectorizer(max_features=1500, ngram_range=(1, 2))
+    vectorizer = TfidfVectorizer(
+        max_features=1500, ngram_range=(1, 2), stop_words=STOP_WORDS_ES
+    )
     matrix = vectorizer.fit_transform(corpus)
     km = KMeans(n_clusters=clusters, random_state=42, n_init="auto").fit(matrix)
     labels = pd.Series(km.labels_, index=corpus.index, name="cluster_id")
     df.loc[labels.index, "cluster_id"] = labels
 
-    keywords = _top_keywords_per_cluster(km, vectorizer)
+    keywords = _top_keywords_per_cluster(km, vectorizer, stop_words=STOP_WORDS_ES)
     counts = (
         df.groupby("cluster_id")
         .agg(
@@ -271,13 +325,26 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
 
 
 def _top_keywords_per_cluster(
-    model: KMeans, vectorizer: TfidfVectorizer, top_n: int = 5
+    model: KMeans,
+    vectorizer: TfidfVectorizer,
+    top_n: int = 5,
+    stop_words: Optional[List[str]] = None,
 ) -> List[str]:
     feature_names = np.array(vectorizer.get_feature_names_out())
     keywords = []
     for centroid in model.cluster_centers_:
-        idx = np.argsort(centroid)[::-1][:top_n]
-        keywords.append(", ".join(feature_names[idx]))
+        idx = np.argsort(centroid)[::-1]
+        cleaned = []
+        for i in idx:
+            token = feature_names[i]
+            if stop_words and token in stop_words:
+                continue
+            if token.isdigit():
+                continue
+            cleaned.append(token)
+            if len(cleaned) >= top_n:
+                break
+        keywords.append(", ".join(cleaned))
     return keywords
 
 
@@ -330,3 +397,126 @@ def agent_flow(summary: Dict[str, float]) -> List[Dict[str, str]]:
         },
     ]
 
+
+def _build_text_corpus(df: pd.DataFrame) -> pd.Series:
+    """Concatena y limpia campos relevantes para búsqueda aproximada."""
+    combined = (
+        df["Titulo"].fillna("")
+        + " "
+        + df["Descripción"].fillna("")
+        + " "
+        + df["Etiqueta"].fillna("")
+        + " "
+        + df["Categoría"].fillna("")
+        + " "
+        + df["theme_group"].fillna("")
+    ).str.lower()
+    # Limpia etiquetas HTML y entidades básicas
+    combined = combined.str.replace(r"<[^>]+>", " ", regex=True)
+    combined = combined.str.replace(r"&nbsp;", " ", regex=True)
+    combined = combined.str.replace(r"\s+", " ", regex=True)
+    return combined
+
+
+def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFrame:
+    """Búsqueda aproximada usando TF-IDF; fallback a filtro por palabras clave."""
+    query = (query or "").strip()
+    if not query:
+        return pd.DataFrame()
+
+    corpus = _build_text_corpus(df)
+    scores = pd.Series(0.0, index=df.index)
+    tfidf_max = 0.0
+    if TfidfVectorizer is not None:
+        try:
+            vectorizer = TfidfVectorizer(
+                max_features=2000, ngram_range=(1, 2), stop_words=STOP_WORDS_ES
+            )
+            matrix = vectorizer.fit_transform(corpus)
+            query_vec = vectorizer.transform([query.lower()])
+            tfidf_array = (matrix @ query_vec.T).toarray().ravel()
+            scores = pd.Series(tfidf_array, index=df.index)
+            tfidf_max = float(scores.max()) if len(scores) else 0.0
+        except Exception:
+            # fallback silencioso cuando TF-IDF falla
+            scores = pd.Series(0.0, index=df.index)
+            tfidf_max = 0.0
+
+    keywords = [w for w in re.split(r"\W+", query.lower()) if len(w) > 2]
+
+    # Fallback adicional cuando TF-IDF no aporta similitud
+    if tfidf_max == 0:
+        keyword_scores = corpus.apply(
+            lambda text: sum(kw in text for kw in keywords)
+        ).astype(float)
+        scores = pd.Series(keyword_scores, index=df.index)
+        # si aún así todo es cero, usa coincidencia de substring simple
+        if scores.max() == 0 and keywords:
+            scores = corpus.str.contains("|".join(map(re.escape, keywords)), case=False).astype(
+                float
+            )
+        # si seguimos sin señal, intenta coincidencia directa con el query completo
+        if scores.max() == 0:
+            scores = corpus.str.contains(re.escape(query.lower()), case=False).astype(float)
+            # última defensa: asigna pequeña señal a todos para devolver top_k
+            if scores.max() == 0:
+                scores = pd.Series(1.0, index=corpus.index)
+
+    results = df.copy()
+    results["similarity"] = scores
+    results["metadata_completeness"] = results["metadata_completeness"].fillna(0.0)
+    results["days_since_update"] = results["days_since_update"].fillna(9999)
+
+    columns = [
+        "UID",
+        "Titulo",
+        "entidad",
+        "sector",
+        "theme_group",
+        "metadata_completeness",
+        "days_since_update",
+        "update_frequency_norm",
+        "Vistas",
+        "Descargas",
+        "similarity",
+    ]
+    present_cols = [c for c in columns if c in results.columns]
+
+    return (
+        results.sort_values("similarity", ascending=False)
+        .head(top_k)
+        .loc[:, present_cols]
+        .reset_index(drop=True)
+    )
+
+
+def build_search_report(
+    query: str, results: pd.DataFrame, threshold: float = 0.05, row_index: int = 0
+) -> str:
+    """Genera un breve reporte sobre el match seleccionado."""
+    if results.empty:
+        return f"No se encontraron activos relacionados con la consulta: **{query}**."
+
+    idx = row_index if 0 <= row_index < len(results) else 0
+    top = results.iloc[idx]
+    confidence = top.get("similarity", 0)
+    match_note = (
+        "Hallazgo sólido" if confidence >= threshold else "Hallazgo aproximado"
+    )
+
+    vistas = pd.to_numeric(top.get("Vistas"), errors="coerce")
+    descargas = pd.to_numeric(top.get("Descargas"), errors="coerce")
+    vistas_int = int(vistas) if pd.notna(vistas) else 0
+    descargas_int = int(descargas) if pd.notna(descargas) else 0
+
+    return f"""
+### Recomendación · {match_note}
+- Consulta: "**{query}**"
+- Dataset sugerido: **{top['Titulo']}** ({top['entidad']})
+- Similitud estimada: **{confidence:.0%}** · Completitud: **{top['metadata_completeness']:.0%}**
+- Sector/tema: **{top['sector']}** · Eje temático: **{top['theme_group']}**
+- Actualizado hace **{int(top['days_since_update'])} días** (frecuencia declarada: {top['update_frequency_norm']})
+- Consumo: **{vistas_int:,} vistas** · **{descargas_int:,} descargas**
+
+Selecciona otra fila en la tabla para actualizar el reporte; se listan hasta {len(results)} coincidencias ordenadas por similitud.
+""".strip()

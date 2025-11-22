@@ -42,33 +42,19 @@ def register_search_callbacks(app, df):
         ],
         [
             Input("search-button", "n_clicks"),
-<<<<<<< ours
-<<<<<<< ours
-<<<<<<< ours
-            Input("search-table", "active_cell"),
-=======
             Input("search-table", "selected_rows"),
->>>>>>> theirs
-=======
-            Input("search-table", "selected_rows"),
->>>>>>> theirs
-=======
-            Input("search-table", "selected_rows"),
->>>>>>> theirs
         ],
         [
             State("search-query", "value"),
             State("search-results-store", "data"),
-            State("search-table", "selected_rows"),
         ],
     )
-    def _run_search(n_clicks: int, selected_rows, query: str, stored_results, download_clicks):
+    def _run_search(n_clicks: int, selected_rows, query: str, stored_results):
         triggered = {t["prop_id"] for t in callback_context.triggered}
 
         if not n_clicks and not triggered:
             return [], None, [], "Describe un dataset para ver recomendaciones."
 
-        # Botón de búsqueda presionado: recalcula resultados
         if "search-button.n_clicks" in triggered:
             try:
                 results = search_inventory(query, df, top_k=8)
@@ -83,25 +69,21 @@ def register_search_callbacks(app, df):
             report = build_search_report(query, results, row_index=0)
             return display_rows, results.to_dict("records"), selected, report
 
-        # Cambio de selección en la tabla o descarga
         if stored_results:
-            results = pd.DataFrame(stored_results)
-            display_rows = _format_table_rows(results).to_dict("records")
-            selected_idx = selected_rows[0] if selected_rows else 0
-            report = build_search_report(query or "", results, row_index=selected_idx)
-            # Exportar CSV si se presionó el botón
-            if "download-search-btn.n_clicks" in triggered:
-                rows_to_export = results.iloc[selected_rows] if selected_rows else results
-                return (
-                    display_rows,
-                    stored_results,
-                    selected_rows or [],
-                    report,
-                    send_data_frame(rows_to_export.to_csv, "busqueda_datasets.csv", index=False),
-                )
-            return display_rows, stored_results, selected_rows or [], report, None
+            try:
+                results = pd.DataFrame(stored_results)
+                display_rows = _format_table_rows(results).to_dict("records")
+                selected_rows = selected_rows or []
+                selected_idx = selected_rows[0] if selected_rows else 0
+                if selected_idx >= len(results):
+                    selected_idx = 0
 
-        return [], None, [], "Describe un dataset para ver recomendaciones.", None
+                report = build_search_report(query or "", results, row_index=selected_idx)
+                return display_rows, stored_results, selected_rows, report
+            except Exception as exc:  # pragma: no cover
+                return [], stored_results, selected_rows or [], f"Error en selección: {exc}"
+
+        return [], None, [], "Describe un dataset para ver recomendaciones."
 
     return app
 

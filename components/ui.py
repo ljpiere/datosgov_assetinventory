@@ -102,7 +102,6 @@ def build_search_table() -> dash_table.DataTable:
         data=[],
         row_selectable="single",
         selected_rows=[],
-        active_cell=None,
         style_table={"overflowX": "auto"},
         style_cell={"textAlign": "left", "padding": "0.5rem"},
         style_data_conditional=[

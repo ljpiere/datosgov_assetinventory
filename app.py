@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dash import Dash, dcc, html
 
-from analysis import load_inventory
+from analysis import load_inventory_api
 from callbacks import register_page_routing, register_search_callbacks
 
 
 def create_app() -> Dash:
     """Inicializa la app Dash, layout y callbacks."""
-    df = load_inventory()
+    df = load_inventory_api()
     app = Dash(__name__, suppress_callback_exceptions=True)
     app.layout = html.Div(
         [

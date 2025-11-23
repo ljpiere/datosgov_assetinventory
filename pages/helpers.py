@@ -81,8 +81,9 @@ def build_figures(df):
         df.sample(min(5000, len(df)), random_state=42),
         x="days_since_update",
         y="views",
+        log_y=True,
         color="metadata_segment",
-        hover_data=["Titulo", "entidad", "metadata_completeness"],
+        hover_data=["name", "entidad", "metadata_completeness"],
         title="Relación entre frescura y consumo",
         labels={
             "days_since_update": "Días desde la última actualización de datos",

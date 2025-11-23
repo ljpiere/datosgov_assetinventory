@@ -91,7 +91,7 @@ def build_search_table() -> dash_table.DataTable:
         id="search-table",
         columns=[
             {"name": "Similitud", "id": "similarity", "type": "numeric"},
-            {"name": "Título", "id": "Titulo"},
+            {"name": "Título", "id": "name"},
             {"name": "Entidad", "id": "entidad"},
             {"name": "Sector", "id": "sector"},
             {"name": "Tema", "id": "theme_group"},
@@ -112,6 +112,7 @@ def build_search_table() -> dash_table.DataTable:
     )
 
 
+
 def build_search_section(search_table: dash_table.DataTable) -> html.Div:
     return html.Div(
         [
@@ -119,19 +120,29 @@ def build_search_section(search_table: dash_table.DataTable) -> html.Div:
                 [
                     html.Div(
                         [
-                            html.Label("Describe lo que buscas"),
-                            dcc.Textarea(
+                            html.Label("Describe lo que buscas", style={"fontWeight": "bold"}),
+                            dcc.Input(
                                 id="search-query",
                                 placeholder="Ej: series históricas de calidad del aire en Bogotá",
-                                style={"width": "100%", "minHeight": "90px"},
+                                style={"width": "100%", "padding": "10px", "marginTop": "5px"},
+                                type="text"
                             ),
-                        ]
+                        ],
+                        style={"flex": "1"}
                     ),
                     html.Button(
                         "Buscar dataset",
                         id="search-button",
                         n_clicks=0,
-                        style={"height": "48px", "padding": "0 1.5rem"},
+                        style={
+                            "height": "42px", 
+                            "padding": "0 1.5rem", 
+                            "backgroundColor": "#0056b3", 
+                            "color": "white", 
+                            "border": "none",
+                            "borderRadius": "5px",
+                            "cursor": "pointer"
+                        },
                     ),
                 ],
                 style=STYLES["search_box"],
@@ -141,10 +152,33 @@ def build_search_section(search_table: dash_table.DataTable) -> html.Div:
                     dcc.Markdown(
                         "Escribe una oración y obtén coincidencias aproximadas "
                         "por título, descripción, etiquetas o temas.",
-                        style={"marginBottom": "0.5rem"},
+                        style={"marginBottom": "0.5rem", "color": "#666"},
                     ),
                     search_table,
-                    dcc.Markdown(id="search-report", style={"marginTop": "1rem"}),
+                    
+                    # --- NUEVO: Contenedor para reporte y descarga ---
+                    html.Div([
+                        dcc.Markdown(id="search-report", style={"padding": "10px", "backgroundColor": "#f1f1f1", "flex": "1"}),
+                        html.Div([
+                            html.Button(
+                                "Generar Informe ASPA 2025",
+                                id="btn-download-report",
+                                style={
+                                    "marginTop": "10px",
+                                    "padding": "10px 20px",
+                                    "backgroundColor": "#28a745", # Verde
+                                    "color": "white",
+                                    "border": "none",
+                                    "borderRadius": "5px",
+                                    "cursor": "pointer",
+                                    "fontWeight": "bold",
+                                    "display": "none" # Oculto por defecto hasta que se seleccione algo
+                                }
+                            ),
+                            dcc.Download(id="download-component")
+                        ], style={"marginLeft": "20px", "alignSelf": "start"})
+                    ], style={"display": "flex", "marginTop": "1rem", "alignItems": "flex-start"}),
+                    # ------------------------------------------------
                 ],
                 style=STYLES["search_card"],
             ),

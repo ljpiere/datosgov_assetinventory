@@ -156,6 +156,7 @@ def navbar(active_path: str = "/") -> html.Nav:
     nav_links = [
         ("Bienvenida", "/"),
         ("Búsqueda", "/search"),
+        ("Reporte", "/report"),
         ("Métricas", "/metrics"),
         ("Brechas", "/gaps"),
         ("Modelo ML", "/ml"),

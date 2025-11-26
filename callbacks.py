@@ -1,13 +1,22 @@
 from __future__ import annotations
 
 import pandas as pd
-from dash import Input, Output, State, callback_context
+from dash import Input, Output, State, callback_context, dcc, html, no_update
+from dash import dash_table
 
-from analysis import build_search_report, search_inventory
+from analysis import build_search_report, get_dataset_by_uid, search_inventory
+from components.ui import STYLES
+from reporting import (
+    build_dataset_metrics,
+    build_metadata_pairs,
+    build_pdf_document,
+    build_quality_summary,
+)
 from pages import (
     gaps_layout,
     metrics_layout,
     ml_layout,
+    report_layout,
     search_layout,
     welcome_layout,
 )
@@ -88,6 +97,167 @@ def register_search_callbacks(app, df):
     return app
 
 
+def _normalize_record(row: pd.Series) -> dict:
+    record = {}
+    for key, value in row.items():
+        if pd.isna(value):
+            record[key] = None
+        elif isinstance(value, pd.Timestamp):
+            record[key] = value.isoformat()
+        else:
+            record[key] = value
+    return record
+
+
+def _report_placeholder():
+    return html.Div(
+        [
+            html.H4("Esperando un UID..."),
+            html.P(
+                "Ingresa el UID exacto del dataset y pulsa \"Buscar UID\" para generar el reporte.",
+                className="subtitle",
+            ),
+        ]
+    )
+
+
+def _build_report_view(record: dict):
+    quality = build_quality_summary(record)
+    metadata_pairs = build_metadata_pairs(record)
+    metrics = build_dataset_metrics(record)
+
+    header = html.Div(
+        [
+            html.H3(record.get("Titulo", "Sin título")),
+            html.Div(
+                [
+                    html.Span(f"UID: {record.get('UID', 'N/D')}"),
+                    html.Span(f"Entidad: {record.get('entidad', 'Sin registro')}"),
+                    html.Span(f"Sector: {record.get('sector', 'Sin registro')}"),
+                ],
+                style={
+                    "display": "flex",
+                    "gap": "0.5rem",
+                    "flexWrap": "wrap",
+                    "fontSize": "0.9rem",
+                    "color": "#374151",
+                },
+            ),
+            html.P(record.get("Descripción") or "Sin descripción disponible."),
+            html.Small(
+                "Resumen alineado a la Guía de Calidad e Interoperabilidad 2025.",
+                style={"color": "#4b5563"},
+            ),
+        ]
+    )
+
+    quality_cards = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(item["label"], className="metric-title"),
+                    html.Div(item["value"], className="metric-value"),
+                    html.Small(item["detail"], className="metric-detail"),
+                ],
+                style=STYLES["metric_card"],
+            )
+            for item in quality
+        ],
+        style=STYLES["metric_grid"],
+    )
+
+    metadata_table = dash_table.DataTable(
+        data=metadata_pairs,
+        columns=[{"name": "Campo", "id": "Campo"}, {"name": "Valor", "id": "Valor"}],
+        page_size=10,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left", "padding": "0.5rem"},
+    )
+
+    metrics_table = dash_table.DataTable(
+        data=metrics,
+        columns=[
+            {"name": "Métrica", "id": "Métrica"},
+            {"name": "Categoría", "id": "Categoría"},
+            {"name": "Puntaje", "id": "Puntaje"},
+            {"name": "Definición", "id": "Definición"},
+        ],
+        page_size=8,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left", "padding": "0.4rem"},
+    )
+
+    return html.Div(
+        [
+            header,
+            html.H4("Métricas clave"),
+            quality_cards,
+            html.H4("Métricas de la Guía 2025"),
+            metrics_table,
+            html.H4("Metadatos disponibles"),
+            metadata_table,
+        ]
+    )
+
+
+def register_report_callbacks(app, df):
+    @app.callback(
+        [
+            Output("report-content", "children"),
+            Output("report-record-store", "data"),
+            Output("report-download-button", "disabled"),
+        ],
+        Input("report-search-button", "n_clicks"),
+        State("report-uid-input", "value"),
+    )
+    def _render_report(n_clicks: int, uid: str):
+        if not n_clicks:
+            return _report_placeholder(), None, True
+
+        matches = get_dataset_by_uid(uid, df)
+        if matches.empty:
+            msg = html.Div(
+                [
+                    html.H4("UID no encontrado"),
+                    html.P(
+                        f"No se encontró un dataset público con UID \"{uid}\". "
+                        "Verifica el identificador y vuelve a intentarlo."
+                    ),
+                ]
+            )
+            return msg, None, True
+
+        record = _normalize_record(matches.iloc[0])
+        view = _build_report_view(record)
+        return view, {"record": record}, False
+
+    @app.callback(
+        Output("report-download", "data"),
+        Input("report-download-button", "n_clicks"),
+        State("report-record-store", "data"),
+        prevent_initial_call=True,
+    )
+    def _download_report(n_clicks: int, stored):
+        if not n_clicks:
+            return no_update
+        if not stored or "record" not in stored:
+            return no_update
+
+        record = stored["record"]
+        quality = build_quality_summary(record)
+        metadata_pairs = build_metadata_pairs(record)
+        metric_scores = build_dataset_metrics(record)
+        try:
+            pdf_bytes = build_pdf_document(record, quality, metadata_pairs, metric_scores)
+            filename = f"reporte_{record.get('UID', 'dataset')}.pdf"
+            return dcc.send_bytes(lambda buf: buf.write(pdf_bytes), filename=filename)
+        except Exception as exc:  # pragma: no cover - manejo defensivo
+            error_msg = f"Error al generar PDF: {exc}"
+            return dcc.send_string(error_msg, filename="reporte_error.txt")
+
+    return app
+
+
 def register_page_routing(app, df):
     @app.callback(
         Output("page-container", "children"),
@@ -98,6 +268,8 @@ def register_page_routing(app, df):
             return welcome_layout(df)
         if pathname.startswith("/search"):
             return search_layout(df)
+        if pathname.startswith("/report"):
+            return report_layout(df)
         if pathname.startswith("/metrics"):
             return metrics_layout(df)
         if pathname.startswith("/gaps"):

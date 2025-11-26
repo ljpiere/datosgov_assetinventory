@@ -2,3 +2,4 @@ dash==2.17.0
 pandas==2.2.2
 plotly==5.22.0
 scikit-learn==1.4.2
+reportlab==4.1.0

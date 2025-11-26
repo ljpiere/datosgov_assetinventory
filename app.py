@@ -3,7 +3,11 @@ from __future__ import annotations
 from dash import Dash, dcc, html
 
 from analysis import load_inventory
-from callbacks import register_page_routing, register_search_callbacks
+from callbacks import (
+    register_page_routing,
+    register_report_callbacks,
+    register_search_callbacks,
+)
 
 
 def create_app() -> Dash:
@@ -18,6 +22,7 @@ def create_app() -> Dash:
     )
     register_page_routing(app, df)
     register_search_callbacks(app, df)
+    register_report_callbacks(app, df)
     return app
 
 

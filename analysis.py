@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -418,10 +418,61 @@ def _build_text_corpus(df: pd.DataFrame) -> pd.Series:
     return combined
 
 
+def _filter_search_scope(
+    df: pd.DataFrame, allowed_types: Optional[Sequence[str]] = ("dataset",)
+) -> pd.DataFrame:
+    """
+    Restringe el universo de búsqueda a datasets públicos con UID válido.
+
+    - type/Tipo == "dataset"
+    - Excluye UIDs con formato "uid:<n>" o vacíos
+    - publication_storage/Público marcado como público
+    """
+    filtered = df.copy()
+
+    type_column = "type" if "type" in filtered.columns else "Tipo" if "Tipo" in filtered.columns else None
+    if allowed_types is not None and type_column:
+        allowed = {t.lower() for t in allowed_types}
+        filtered = filtered[filtered[type_column].fillna("").str.lower().isin(allowed)]
+
+    if "UID" in filtered.columns:
+        uid_series = filtered["UID"].astype(str)
+        valid_uid = uid_series.str.strip().ne("") & ~uid_series.str.match(
+            r"uid:\d+$", case=False, na=False
+        )
+        filtered = filtered[valid_uid]
+
+    if "publication_storage" in filtered.columns:
+        storage = filtered["publication_storage"].fillna("").str.lower()
+        filtered = filtered[storage.isin({"publico", "public"})]
+    elif "Público" in filtered.columns:
+        filtered = filtered[filtered["Público"].fillna("").str.lower().eq("public")]
+
+    return filtered
+
+
+def get_dataset_by_uid(uid: str, df: pd.DataFrame) -> pd.DataFrame:
+    """Devuelve el dataset que coincide con el UID, aplicando el filtro de alcance."""
+    uid = (uid or "").strip().lower()
+    if not uid:
+        return pd.DataFrame()
+
+    scoped = _filter_search_scope(df, allowed_types=None)
+    if "UID" not in scoped.columns or scoped.empty:
+        return pd.DataFrame()
+
+    matches = scoped[scoped["UID"].fillna("").str.lower() == uid]
+    return matches
+
+
 def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFrame:
     """Búsqueda aproximada usando TF-IDF; fallback a filtro por palabras clave."""
     query = (query or "").strip()
     if not query:
+        return pd.DataFrame()
+
+    df = _filter_search_scope(df)
+    if df.empty:
         return pd.DataFrame()
 
     corpus = _build_text_corpus(df)

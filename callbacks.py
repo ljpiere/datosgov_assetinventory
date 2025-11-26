@@ -4,13 +4,19 @@ import pandas as pd
 from dash import Input, Output, State, callback_context, dcc, html, no_update
 from dash import dash_table
 
-from analysis import build_search_report, get_dataset_by_uid, search_inventory
+from analysis import (
+    build_search_report,
+    get_dataset_by_uid,
+    get_public_scope,
+    search_inventory,
+)
 from components.ui import STYLES
 from reporting import (
     build_dataset_metrics,
     build_metadata_pairs,
     build_pdf_document,
     build_quality_summary,
+    build_cut_csv,
 )
 from pages import (
     gaps_layout,
@@ -18,6 +24,7 @@ from pages import (
     ml_layout,
     report_layout,
     search_layout,
+    cut_layout,
     welcome_layout,
 )
 
@@ -258,6 +265,32 @@ def register_report_callbacks(app, df):
     return app
 
 
+def register_cut_callbacks(app, df):
+    @app.callback(
+        [Output("cut-download", "data"), Output("cut-status", "children")],
+        Input("cut-generate-button", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def _generate_cut(n_clicks: int):
+        if not n_clicks:
+            return no_update, no_update
+
+        scoped = get_public_scope(df)
+        if scoped.empty:
+            return (
+                no_update,
+                html.Div("No hay datasets públicos disponibles para generar el corte."),
+            )
+
+        csv_text = build_cut_csv(scoped)
+        filename = f"corte_metricas_{pd.Timestamp.utcnow():%Y%m%d}.csv"
+        download = dcc.send_string(csv_text, filename=filename)
+        status = html.Div("Corte generado. La descarga debería iniciarse automáticamente.")
+        return download, status
+
+    return app
+
+
 def register_page_routing(app, df):
     @app.callback(
         Output("page-container", "children"),
@@ -270,6 +303,8 @@ def register_page_routing(app, df):
             return search_layout(df)
         if pathname.startswith("/report"):
             return report_layout(df)
+        if pathname.startswith("/cut"):
+            return cut_layout(df)
         if pathname.startswith("/metrics"):
             return metrics_layout(df)
         if pathname.startswith("/gaps"):

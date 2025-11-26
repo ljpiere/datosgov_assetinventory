@@ -4,6 +4,7 @@ from pages.metrics import layout as metrics_layout
 from pages.gaps import layout as gaps_layout
 from pages.ml import layout as ml_layout
 from pages.report import layout as report_layout
+from pages.cut import layout as cut_layout
 
 __all__ = [
     "welcome_layout",
@@ -12,4 +13,5 @@ __all__ = [
     "gaps_layout",
     "ml_layout",
     "report_layout",
+    "cut_layout",
 ]

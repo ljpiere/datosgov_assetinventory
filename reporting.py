@@ -5,6 +5,8 @@ import textwrap
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
+import csv
+from datetime import datetime
 
 try:
     from reportlab.lib.pagesizes import letter
@@ -398,4 +400,83 @@ def build_pdf_document(
 
     c.save()
     buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _extract_score(score_label: str) -> str:
+    if not score_label:
+        return ""
+    if isinstance(score_label, (int, float)):
+        return f"{float(score_label):.1f}"
+    text = str(score_label)
+    if text.lower().startswith("no evaluado"):
+        return ""
+    if "/" in text:
+        try:
+            return f"{float(text.split('/')[0]):.1f}"
+        except Exception:
+            return text
+    try:
+        return f"{float(text):.1f}"
+    except Exception:
+        return text
+
+
+def build_cut_csv(df) -> str:
+    """Genera CSV plano con métricas y metadatos para todos los datasets públicos."""
+    now = datetime.utcnow()
+    catalog = load_metric_catalog()
+    metric_names = [m.get("métrica") for m in catalog]
+
+    base_fields = [
+        "UID",
+        "Titulo",
+        "entidad",
+        "sector",
+        "theme_group",
+        "metadata_completeness",
+        "days_since_update",
+        "update_frequency_norm",
+        "Público",
+        "Common Core: Public Access Level",
+        "Fecha de última actualización de datos (UTC)",
+    ]
+    meta_fields = [f for f in REPORT_METADATA_FIELDS if f not in base_fields]
+    fields = base_fields + meta_fields + metric_names + [
+        "fecha_corte",
+        "mes_reporte",
+        "anio_reporte",
+    ]
+
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=fields, delimiter=";")
+    writer.writeheader()
+
+    for _, row in df.iterrows():
+        record = {k: _clean_value(v) for k, v in row.items()}
+        metric_scores = build_dataset_metrics(record)
+        metric_map = {m["Métrica"]: _extract_score(m.get("Puntaje")) for m in metric_scores}
+
+        last_update = record.get("Fecha de última actualización de datos (UTC)") or record.get(
+            "Common Core: Last Update"
+        )
+        if isinstance(last_update, str):
+            last_update_str = last_update
+        else:
+            last_update_str = _clean_value(last_update)
+
+        row_dict = {
+            "fecha_corte": now.date().isoformat(),
+            "mes_reporte": now.strftime("%Y-%m"),
+            "anio_reporte": now.year,
+        }
+        for field in base_fields + meta_fields:
+            row_dict[field] = record.get(field, "")
+        row_dict["Fecha de última actualización de datos (UTC)"] = last_update_str
+        row_dict.update(metric_map)
+
+        writer.writerow(row_dict)
+
     return buffer.getvalue()

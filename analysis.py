@@ -465,6 +465,11 @@ def get_dataset_by_uid(uid: str, df: pd.DataFrame) -> pd.DataFrame:
     return matches
 
 
+def get_public_scope(df: pd.DataFrame) -> pd.DataFrame:
+    """Devuelve el universo filtrado para reportería masiva (UID válido y público)."""
+    return _filter_search_scope(df, allowed_types=None)
+
+
 def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFrame:
     """Búsqueda aproximada usando TF-IDF; fallback a filtro por palabras clave."""
     query = (query or "").strip()

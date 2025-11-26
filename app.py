@@ -7,6 +7,7 @@ from callbacks import (
     register_page_routing,
     register_report_callbacks,
     register_search_callbacks,
+    register_cut_callbacks,
 )
 
 
@@ -23,6 +24,7 @@ def create_app() -> Dash:
     register_page_routing(app, df)
     register_search_callbacks(app, df)
     register_report_callbacks(app, df)
+    register_cut_callbacks(app, df)
     return app
 
 

@@ -12,6 +12,7 @@ from analysis import (
 )
 from components.ui import STYLES
 from reporting import (
+    build_agent_analysis,
     build_dataset_metrics,
     build_metadata_pairs,
     build_pdf_document,
@@ -132,10 +133,11 @@ def _build_report_view(record: dict):
     quality = build_quality_summary(record)
     metadata_pairs = build_metadata_pairs(record)
     metrics = build_dataset_metrics(record)
+    agent = build_agent_analysis(record)
 
     header = html.Div(
         [
-            html.H3(record.get("Titulo", "Sin título")),
+            html.H3(record.get("name", "Sin título")),
             html.Div(
                 [
                     html.Span(f"UID: {record.get('UID', 'N/D')}"),
@@ -173,6 +175,51 @@ def _build_report_view(record: dict):
         style=STYLES["metric_grid"],
     )
 
+    agent_summary = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div("Estado del dataset", className="metric-title"),
+                    html.Div(agent["status"], className="metric-value"),
+                    html.Small("Diagnostico automatico del agente."),
+                ],
+                style=STYLES["metric_card"],
+            ),
+            html.Div(
+                [
+                    html.Div("Resumen rapido", className="metric-title"),
+                    html.Div(
+                        ", ".join(f"{k}: {v}" for k, v in agent["summary"].items()),
+                        style={"color": "#374151", "fontSize": "0.9rem"},
+                    ),
+                    html.Small("Valores clave usados para el diagnostico."),
+                ],
+                style=STYLES["metric_card"],
+            ),
+        ],
+        style=STYLES["metric_grid"],
+    )
+
+    warning_list = html.Ul([html.Li(w) for w in agent["warnings"]])
+    action_list = html.Ul([html.Li(a) for a in agent["actions"]])
+    agent_panel = html.Div(
+        [
+            html.H4("Acciones recomendadas (Agente)"),
+            html.Div(
+                [
+                    html.Div([html.Strong("Alertas:"), warning_list]),
+                    html.Div([html.Strong("Proximos pasos:"), action_list]),
+                ],
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(auto-fit, minmax(260px, 1fr))",
+                    "gap": "1rem",
+                },
+            ),
+        ],
+        style={"marginBottom": "1rem"},
+    )
+
     metadata_table = dash_table.DataTable(
         data=metadata_pairs,
         columns=[{"name": "Campo", "id": "Campo"}, {"name": "Valor", "id": "Valor"}],
@@ -199,6 +246,8 @@ def _build_report_view(record: dict):
             header,
             html.H4("Métricas clave"),
             quality_cards,
+            agent_summary,
+            agent_panel,
             html.H4("Métricas de la Guía 2025"),
             metrics_table,
             html.H4("Metadatos disponibles"),

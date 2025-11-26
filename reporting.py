@@ -18,7 +18,7 @@ except Exception:  # pragma: no cover - dependencia opcional
 
 REPORT_METADATA_FIELDS: Sequence[str] = (
     "UID",
-    "Titulo",
+    "name",
     "Descripción",
     "entidad",
     "sector",
@@ -315,6 +315,103 @@ def build_metadata_pairs(
     return pairs
 
 
+def _missing_fields(record: Dict[str, Any], fields: Sequence[str]) -> List[str]:
+    missing = []
+    for field in fields:
+        value = record.get(field)
+        if value in (None, "", "nan"):
+            missing.append(field)
+    return missing
+
+
+def build_agent_analysis(record: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Diagnóstico estilo agente para un UID:
+    - Estado general
+    - Alertas detectadas
+    - Acciones sugeridas para cerrar brechas de calidad
+    """
+    completeness = _to_numeric(record.get("metadata_completeness"))
+    coherence_flag_raw = record.get("coherence_flag")
+    coherence_flag = False
+    if isinstance(coherence_flag_raw, str):
+        coherence_flag = coherence_flag_raw.lower() == "true"
+    else:
+        coherence_flag = bool(coherence_flag_raw)
+
+    days_since_update = record.get("days_since_update")
+    days_since_update_num = int(_to_numeric(days_since_update)) if days_since_update is not None else None
+    freq_declared = record.get("update_frequency_norm") or record.get(
+        "Información de Datos: Frecuencia de Actualización", "sin registro"
+    )
+    access_level = str(record.get("Common Core: Public Access Level") or "desconocido").lower()
+    is_public = str(record.get("Público") or "").lower() == "public"
+    has_contact = bool(record.get("Common Core: Contact Email") or record.get("Correo Electrónico de Contacto"))
+    has_license = bool(record.get("Common Core: License") or record.get("Licencia"))
+    desc_len = len(str(record.get("Descripción") or ""))
+
+    critical_fields = [
+        "Descripción",
+        "Categoría",
+        "Etiqueta",
+        "Información de Datos: Frecuencia de Actualización",
+        "Información de Datos: Cobertura Geográfica",
+        "Información de Datos: Idioma",
+        "Información de la Entidad: Nombre de la Entidad",
+        "Common Core: Contact Email",
+        "Common Core: License",
+        "Common Core: Public Access Level",
+    ]
+    missing = _missing_fields(record, critical_fields)
+
+    warnings: List[str] = []
+    actions: List[str] = []
+
+    if completeness < 0.7:
+        warnings.append("Completitud de metadatos por debajo de 70%.")
+        actions.append("Diligencia campos clave (descripción, categoría, etiqueta, frecuencia, contacto y licencia).")
+    if missing:
+        actions.append(f"Completar campos faltantes: {', '.join(missing[:6])}{'...' if len(missing) > 6 else ''}.")
+
+    if not coherence_flag:
+        warnings.append("Inconsistencia entre público vs. Public Access Level.")
+        actions.append("Alinear el campo 'Público' y 'Public Access Level' para evitar bloqueos de acceso.")
+    if not has_contact:
+        warnings.append("No hay correo de contacto registrado.")
+        actions.append("Agregar un correo en 'Common Core: Contact Email'.")
+    if not has_license:
+        warnings.append("No se detecta licencia.")
+        actions.append("Definir licencia en 'Common Core: License'.")
+    if desc_len < 120:
+        actions.append("Ampliar la descripción (mín. 120 caracteres) para mayor comprensibilidad.")
+
+    if days_since_update_num is not None:
+        if freq_declared not in ("sin registro", "", None):
+            actions.append(
+                f"Validar que la frecuencia declarada ({freq_declared}) coincide con {days_since_update_num} días sin actualización."
+            )
+        if days_since_update_num > 180:
+            warnings.append("Datos potencialmente desactualizados.")
+            actions.append("Programar actualización de datos o documentar la periodicidad real.")
+
+    status = "Revisar antes de publicar" if warnings else "Listo con observaciones"
+    if completeness >= 0.9 and coherence_flag and has_contact and has_license and (days_since_update_num or 0) <= 90:
+        status = "Sólido / Publicable"
+
+    return {
+        "status": status,
+        "warnings": warnings or ["Sin alertas críticas detectadas."],
+        "actions": actions or ["Monitorear métricas periódicamente."],
+        "summary": {
+            "completitud": f"{completeness*100:.1f}%" if completeness is not None else "N/D",
+            "coherencia": "Consistente" if coherence_flag else "Revisar",
+            "actualización": f"{days_since_update_num} días" if days_since_update_num is not None else "N/D",
+            "acceso": "Público" if is_public else "Privado",
+            "nivel_acceso": access_level or "desconocido",
+        },
+    }
+
+
 def build_pdf_document(
     record: Dict[str, Any],
     quality: List[Dict[str, str]],
@@ -336,7 +433,7 @@ def build_pdf_document(
     y -= 18
 
     c.setFont("Helvetica", 11)
-    subtitle = record.get("Titulo") or "Sin título"
+    subtitle = record.get("name") or "Sin título"
     for line in textwrap.wrap(subtitle, 95):
         c.drawString(margin, y, line)
         y -= 14
@@ -430,7 +527,7 @@ def build_cut_csv(df) -> str:
 
     base_fields = [
         "UID",
-        "Titulo",
+        "name",
         "entidad",
         "sector",
         "theme_group",

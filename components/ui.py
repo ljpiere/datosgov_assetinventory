@@ -91,7 +91,7 @@ def build_search_table() -> dash_table.DataTable:
         id="search-table",
         columns=[
             {"name": "Similitud", "id": "similarity", "type": "numeric"},
-            {"name": "Título", "id": "Titulo"},
+            {"name": "Título", "id": "name"},
             {"name": "Entidad", "id": "entidad"},
             {"name": "Sector", "id": "sector"},
             {"name": "Tema", "id": "theme_group"},

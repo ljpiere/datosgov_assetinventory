@@ -4,7 +4,6 @@ NOTA: Este módulo genera documentos estructurados con secciones y tablas.
 No utiliza plantillas externas para mantener todo el contenido generado dentro del código.
 No utiliza servicios externos para garantizar privacidad y control total sobre el contenido.
 No utiliza archivos de configuración para simplificar la implementación y despliegue del módulo.
-No se utilizan modelos de lenguaje para asegurar consistencia y evitar sesgos.
 
 """
 from __future__ import annotations

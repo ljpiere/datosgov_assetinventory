@@ -715,6 +715,52 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
     if df.empty:
         return pd.DataFrame()
 
+    uid_pattern = r'^[a-z0-9]{4}-[a-z0-9]{4}$'
+
+    columns = [
+        "UID",
+        "name",
+        "entidad",
+        "sector",
+        "theme_group",
+        "metadata_completeness",
+        "days_since_update",
+        "coherence_flag",
+        "update_frequency_norm",
+        "Vistas",
+        "Descargas",
+        "similarity",
+        "Descripción",       
+        "url",               
+        "Tipo",              
+        "type",              
+        "Dominio",           
+        "domain",            
+        "Licencia",          
+        "Common Core: License", 
+        "Common Core: Public Access Level",
+        "derived_view",      
+        "Categoría",         
+        "row_count",         
+        "api_endpoint",      
+        "Público",           
+        "Common Core: Public Access Level",
+        "Common Core: Contact Email",
+        "email",
+        "Información de Datos: Cobertura Geográfica",
+        "Etiqueta",
+        "Información de Datos: Frecuencia de Actualización",
+        "Información de Datos: Idioma",
+        "Información de la Entidad: Nombre de la Entidad",
+    ]
+
+    if re.match(uid_pattern, query.lower()):
+        exact_match = get_dataset_by_uid(query, df)
+        results["similarity"] = 1.0
+
+        present_cols = [c for c in columns if c in results.columns]
+        return results.loc[:, present_cols].reset_index(drop=True)
+
     corpus = _build_text_corpus(df)
     scores = pd.Series(0.0, index=df.index)
     tfidf_max = 0.0
@@ -758,42 +804,6 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
     results["metadata_completeness"] = results["metadata_completeness"].fillna(0.0)
     results["days_since_update"] = results["days_since_update"].fillna(9999)
 
-    columns = [
-        "UID",
-        "name",
-        "entidad",
-        "sector",
-        "theme_group",
-        "metadata_completeness",
-        "days_since_update",
-        "coherence_flag",
-        "update_frequency_norm",
-        "Vistas",
-        "Descargas",
-        "similarity",
-        "Descripción",       
-        "url",               
-        "Tipo",              
-        "type",              
-        "Dominio",           
-        "domain",            
-        "Licencia",          
-        "Common Core: License", 
-        "Common Core: Public Access Level",
-        "derived_view",      
-        "Categoría",         
-        "row_count",         
-        "api_endpoint",      
-        "Público",           
-        "Common Core: Public Access Level",
-        "Common Core: Contact Email",
-        "email",
-        "Información de Datos: Cobertura Geográfica",
-        "Etiqueta",
-        "Información de Datos: Frecuencia de Actualización",
-        "Información de Datos: Idioma",
-        "Información de la Entidad: Nombre de la Entidad",
-    ]
     present_cols = [c for c in columns if c in results.columns]
 
     return (

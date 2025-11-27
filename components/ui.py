@@ -112,7 +112,6 @@ def build_search_table() -> dash_table.DataTable:
     )
 
 
-
 def build_search_section(search_table: dash_table.DataTable) -> html.Div:
     return html.Div(
         [
@@ -120,29 +119,19 @@ def build_search_section(search_table: dash_table.DataTable) -> html.Div:
                 [
                     html.Div(
                         [
-                            html.Label("Describe lo que buscas", style={"fontWeight": "bold"}),
-                            dcc.Input(
+                            html.Label("Describe lo que buscas"),
+                            dcc.Textarea(
                                 id="search-query",
                                 placeholder="Ej: series históricas de calidad del aire en Bogotá",
-                                style={"width": "100%", "padding": "10px", "marginTop": "5px"},
-                                type="text"
+                                style={"width": "100%", "minHeight": "90px"},
                             ),
-                        ],
-                        style={"flex": "1"}
+                        ]
                     ),
                     html.Button(
                         "Buscar dataset",
                         id="search-button",
                         n_clicks=0,
-                        style={
-                            "height": "42px", 
-                            "padding": "0 1.5rem", 
-                            "backgroundColor": "#0056b3", 
-                            "color": "white", 
-                            "border": "none",
-                            "borderRadius": "5px",
-                            "cursor": "pointer"
-                        },
+                        style={"height": "48px", "padding": "0 1.5rem"},
                     ),
                 ],
                 style=STYLES["search_box"],
@@ -152,33 +141,10 @@ def build_search_section(search_table: dash_table.DataTable) -> html.Div:
                     dcc.Markdown(
                         "Escribe una oración y obtén coincidencias aproximadas "
                         "por título, descripción, etiquetas o temas.",
-                        style={"marginBottom": "0.5rem", "color": "#666"},
+                        style={"marginBottom": "0.5rem"},
                     ),
                     search_table,
-                    
-                    # --- NUEVO: Contenedor para reporte y descarga ---
-                    html.Div([
-                        dcc.Markdown(id="search-report", style={"padding": "10px", "backgroundColor": "#f1f1f1", "flex": "1"}),
-                        html.Div([
-                            html.Button(
-                                "Generar Informe ASPA 2025",
-                                id="btn-download-report",
-                                style={
-                                    "marginTop": "10px",
-                                    "padding": "10px 20px",
-                                    "backgroundColor": "#28a745", # Verde
-                                    "color": "white",
-                                    "border": "none",
-                                    "borderRadius": "5px",
-                                    "cursor": "pointer",
-                                    "fontWeight": "bold",
-                                    "display": "none" # Oculto por defecto hasta que se seleccione algo
-                                }
-                            ),
-                            dcc.Download(id="download-component")
-                        ], style={"marginLeft": "20px", "alignSelf": "start"})
-                    ], style={"display": "flex", "marginTop": "1rem", "alignItems": "flex-start"}),
-                    # ------------------------------------------------
+                    dcc.Markdown(id="search-report", style={"marginTop": "1rem"}),
                 ],
                 style=STYLES["search_card"],
             ),
@@ -190,6 +156,8 @@ def navbar(active_path: str = "/") -> html.Nav:
     nav_links = [
         ("Bienvenida", "/"),
         ("Búsqueda", "/search"),
+        ("Reporte", "/report"),
+        ("Corte", "/cut"),
         ("Métricas", "/metrics"),
         ("Brechas", "/gaps"),
         ("Modelo ML", "/ml"),

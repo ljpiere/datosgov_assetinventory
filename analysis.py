@@ -12,11 +12,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import re
 import requests
+import unicodedata
+import time
+import pickle
 
 try:
     from sklearn.cluster import KMeans
@@ -26,33 +30,35 @@ except ImportError:  # pragma: no cover - se maneja en runtime
     TfidfVectorizer = None
 
 
-DATA_PATH = (
-    Path(__file__).resolve().parent / "datasets" / "Asset_Inventory_Public_20251119.csv"
-)
+
+
+# Guardará el dataframe localmente para evitar recargas innecesarias.
+CACHE_DIR = Path("dataframe")
+CACHE_FILE = CACHE_DIR / "inventory_cache.pkl"
 
 URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
 
 METADATA_FIELDS = [
     "name",
-    "description",
-    "owner",
-    "category",
-    "tags",
-    "informacindedatos_frecuenciadeactualizacin",
-    "informacindedatos_coberturageogrfica",
-    "informacindedatos_idioma",
-    "informacindelaentidad_nombredelaentidad",
-    "commoncore_contactemail",
-    "commoncore_license",
-    "commoncore_publicaccesslevel",
+    "Descripción",
+    "Dueño",
+    "Categoría",
+    "Etiqueta",
+    "Información de Datos: Frecuencia de Actualización",
+    "Información de Datos: Cobertura Geográfica",
+    "Información de Datos: Idioma",
+    "Información de la Entidad: Nombre de la Entidad",
+    "Common Core: Contact Email",
+    "Common Core: License",
+    "Common Core: Public Access Level",
 ]
 
 DATE_COLUMNS = {
-    "creation_date",
-    "last_metadata_updated_date",
-    "last_data_updated_date",
-    "commoncore_issued",
-    "commoncore_lastupdate",
+    "Fecha de creación (UTC)",
+    "Fecha de última actualización de metadatos (UTC)",
+    "Fecha de última actualización de datos (UTC)",
+    "Common Core: Issued",
+    "Common Core: Last Update",
 }
 
 # Lista breve de stopwords en español para la búsqueda aproximada y clustering
@@ -94,93 +100,222 @@ STOP_WORDS_ES = [
     "www",
 ]
 
-def load_inventory_api(path: Path = URL, batch_size = 5000, offset = 0) -> pd.DataFrame:
-    """
-    Carga el inventario y aplica enriquecimiento por medio de api.
+# Normaliza nombres de columnas provenientes de CSV (esp) y API (en) al formato usado en la app
+COLUMN_ALIASES = {
+    "uid": "UID",
+    "name": "name",
+    "title": "name",
+    "titulo": "name",
+    "description": "Descripción",
+    "descripcion": "Descripción",
+    "owner": "Dueño",
+    "dueno": "Dueño",
+    "category": "Categoría",
+    "categoria": "Categoría",
+    "tags": "Etiqueta",
+    "etiqueta": "Etiqueta",
+    "audience": "Público",
+    "publico": "Público",
+    "commoncore_publicaccesslevel": "Common Core: Public Access Level",
+    "common_core_public_access_level": "Common Core: Public Access Level",
+    "informacindelaentidad_nombredelaentidad": "Información de la Entidad: Nombre de la Entidad",
+    "informacion_de_la_entidad_nombre_de_la_entidad": "Información de la Entidad: Nombre de la Entidad",
+    "informacindelaentidad_sector": "Información de la Entidad: Sector",
+    "informacion_de_la_entidad_sector": "Información de la Entidad: Sector",
+    "commoncore_theme": "Common Core: Theme",
+    "common_core_theme": "Common Core: Theme",
+    "visits": "Vistas",
+    "visitas": "Vistas",
+    "downloads": "Descargas",
+    "descargas": "Descargas",
+    "last_data_updated_date": "Fecha de última actualización de datos (UTC)",
+    "fecha_de_ultima_actualizacion_de_datos_utc": "Fecha de última actualización de datos (UTC)",
+    "last_metadata_updated_date": "Fecha de última actualización de metadatos (UTC)",
+    "fecha_de_ultima_actualizacion_de_metadatos_utc": "Fecha de última actualización de metadatos (UTC)",
+    "creation_date": "Fecha de creación (UTC)",
+    "fecha_de_creacion_utc": "Fecha de creación (UTC)",
+    "commoncore_issued": "Common Core: Issued",
+    "common_core_issued": "Common Core: Issued",
+    "commoncore_lastupdate": "Common Core: Last Update",
+    "common_core_last_update": "Common Core: Last Update",
+    "informacindedatos_frecuenciadeactualizacin": "Información de Datos: Frecuencia de Actualización",
+    "informacion_de_datos_frecuencia_de_actualizacion": "Información de Datos: Frecuencia de Actualización",
+    "informacindedatos_coberturageogrfica": "Información de Datos: Cobertura Geográfica",
+    "informacindedatos_idioma": "Información de Datos: Idioma",
+    "informacion_de_datos_cobertura_geografica": "Información de Datos: Cobertura Geográfica",
+    "informacion_de_datos_idioma": "Información de Datos: Idioma",
+    "commoncore_contactemail": "Common Core: Contact Email",
+    "common_core_contact_email": "Common Core: Contact Email",
+    "commoncore_license": "Common Core: License",
+    "common_core_license": "Common Core: License",
+}
+
+import pandas as pd
+import requests
+import numpy as np
+from pathlib import Path
+
+def load_api(path: str, batch_size: int = 5000, offset: int = 0) -> pd.DataFrame:
+    """ carga el inventario desde la API en modo batch 
     """
     all_records = []
-        # carga en lotes para evitar timeouts.
-        # carga por lotes porque la api tiene un limite de 1000 registros por consulta.
+    session = requests.Session()
+    
+    try:
+        while True:
+            params = {"$limit": batch_size, "$offset": offset}
+            response = session.get(path, params=params, timeout=100)
+            response.raise_for_status()
+            
+            data = response.json()
+            if not data:
+                break
+            
+            all_records.extend(data)
+            offset += batch_size
 
-    while True:
-        params = {"$limit": batch_size, "$offset": offset}
-        response = requests.get(path, params=params, timeout=100)
-        response.raise_for_status()
-        data = response.json()
-        if not data:
-            break
-        all_records.extend(data)
-        offset += batch_size
+    finally:
+        session.close()
+
+    if not all_records:
+        return pd.DataFrame()
 
     df = pd.DataFrame(all_records)
-    df = df.replace(["", " ", "NA", "N/A", "-", "null", "None"], np.nan)
+    cleanup_map = {
+        "": np.nan,
+        " ": np.nan,
+        "NA": np.nan,
+        "N/A": np.nan,
+        "-": np.nan,
+        "null": np.nan,
+        "None": np.nan
+    }
+    df = df.replace(cleanup_map)
     df = df.infer_objects(copy=False)
-    print(df.columns)
-    df = enrich_inventory(df)
+    
+    print(f"Columnas cargadas: {list(df.columns)}")
     return df
 
 
+def load_inventory(path: str = URL, batch_size: int = 5000, offset: int = 0, force_update: bool = False) -> pd.DataFrame:
+    """
+    Carga el inventario. 
+    Verifica si existe la carpeta 'dataframe', si no, la crea.
+    Busca el archivo .pkl.
+    Si el archivo existe y tiene menos de 12 horas, lo carga.
+    Si es viejo (>12h) o no existe, descarga de la API y lo guarda.
+    """
+    
+    # Asegurar que el directorio de caché exista
+    if not CACHE_DIR.exists():
+        print(f"Creando directorio de caché: {CACHE_DIR}")
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# cambiar las columnas por las del nombre correcto
-# la api cambia el orden de las columnas y los nombres
+    # Definir expiración 12 horas en segundos
+    CACHE_DURATION_SECONDS = 12 * 3600
+    
+    # Verificar estado del archivo en disco
+    file_exists = CACHE_FILE.exists()
+    is_fresh = False
+    
+    if file_exists:
+        last_modified = CACHE_FILE.stat().st_mtime
+        time_since_update = time.time() - last_modified
+        is_fresh = time_since_update < CACHE_DURATION_SECONDS
+        
+        if is_fresh:
+            print(f"Caché válida (actualizada hace {time_since_update/3600:.1f} horas).")
+        else:
+            print(f"Caché expirada (hace {time_since_update/3600:.1f} horas). Se actualizará.")
+
+    # Lógica de carga
+    if file_exists and is_fresh and not force_update:
+        print(f"Cargando inventario desde: {CACHE_FILE} ...")
+        try:
+            with open(CACHE_FILE, "rb") as f:
+                return pickle.load(f)
+        except Exception as e:
+            print(f"Error leyendo el archivo local ({e}), intentando descargar...")
+
+    # Descarga desde API (si no hay caché, está vieja o force_update=True)
+    print("Iniciando descarga de datos actualizados desde la API...")
+    try:
+        df = load_api(path, batch_size=batch_size, offset=offset)
+        df = enrich_inventory(df)
+        
+        # Guardar en disco
+        print(f"Guardando datos actualizados en {CACHE_FILE} ...")
+        with open(CACHE_FILE, "wb") as f:
+            pickle.dump(df, f)
+            
+        return df
+        
+    except Exception as e:
+        # Si falla la API pero tenemos un archivo viejo, usémoslo como emergencia
+        if file_exists:
+            print(f"Error conectando a API ({e}). Usando caché antigua por seguridad.")
+            with open(CACHE_FILE, "rb") as f:
+                return pickle.load(f)
+        raise e
 
 def enrich_inventory(df: pd.DataFrame) -> pd.DataFrame:
     """Normaliza campos clave y genera columnas derivadas."""
     df = df.copy()
     df.columns = [c.strip() for c in df.columns]
+    df = _apply_aliases(df)
 
-    # 1. Asegurar conversión de todas las columnas de fecha posibles
-    # Ampliamos la lista para asegurar que 'last_metadata_updated_date' se procese
-    POSSIBLE_DATE_COLS = [
-        "creation_date",
-        "last_metadata_updated_date",
-        "last_data_updated_date",
-        "commoncore_issued",
-        "commoncore_lastupdate",
-    ]
+    if "type" in df.columns:
+        df["derived_view"] = df["type"].apply(lambda x: str(x).lower() not in ["dataset", "table"])
+    elif "Tipo" in df.columns:
+        df["derived_view"] = df["Tipo"].apply(lambda x: str(x).lower() not in ["dataset", "table"])
+    else:
+        df["derived_view"] = False
 
-    for col in POSSIBLE_DATE_COLS:
+    if "domain" not in df.columns and "Dominio" not in df.columns:
+        df["domain"] = "www.datos.gov.co"
+
+    for col in DATE_COLUMNS:
         if col in df.columns:
-            # errors='coerce' convierte fechas inválidas en NaT (Not a Time)
             df[col] = pd.to_datetime(
                 df[col],
                 errors="coerce",
-                format="mixed", # Permite formatos mixtos como '2024 Apr 01' e ISO
-                utc=True,
+                format="mixed",
+                utc=True,  
             )
 
-    # 2. Lógica de columnas booleanas y texto
-    df["is_public"] = df['audience'].astype(str).str.lower().eq("public")
-    
-    if "commoncore_publicaccesslevel" in df.columns:
-        df["public_access_level"] = df["commoncore_publicaccesslevel"].astype(str).str.lower().replace("nan", "desconocido")
+    audience_col = "Público" if "Público" in df.columns else "audience"
+    df["is_public"] = (
+        df[audience_col].astype(str).str.lower().eq("public") if audience_col in df.columns else False
+    )
+    if "Common Core: Public Access Level" in df.columns:
+        df["public_access_level"] = (
+            df["Common Core: Public Access Level"].astype(str).str.lower().fillna("desconocido")
+        )
     else:
         df["public_access_level"] = "desconocido"
-
     df["coherence_flag"] = (
         df["is_public"] & df["public_access_level"].str.contains("public")
     ) | (~df["is_public"] & ~df["public_access_level"].str.contains("public"))
 
-    # Normalización de Entidad
-    entidad_col = "informacindelaentidad_nombredelaentidad"
-    if entidad_col in df.columns:
-        df["entidad"] = df[entidad_col].fillna(df.get("owner", "")).fillna("Entidad sin registro")
-    else:
-        df["entidad"] = df.get("owner", "Entidad sin registro")
+    entidad_series = df.get("Información de la Entidad: Nombre de la Entidad")
+    owner_series = df.get("Dueño")
+    if entidad_series is None:
+        entidad_series = pd.Series("Entidad sin registro", index=df.index)
+    df["entidad"] = entidad_series.fillna(owner_series).fillna("Entidad sin registro")
 
-    # Normalización de Sector
-    sector_col = "informacindelaentidad_sector"
-    df["sector"] = df[sector_col].fillna("Sector sin registro") if sector_col in df.columns else "Sector sin registro"
+    sector_series = df.get("Información de la Entidad: Sector")
+    df["sector"] = sector_series.fillna("Sector sin registro") if sector_series is not None else "Sector sin registro"
 
-    # Normalización de Tema
-    df["theme_group"] = (
-        df.get("commoncore_theme")
-        .fillna(df.get("category"))
-        .fillna(df.get("tags"))
-        .fillna("Tema sin registro")
-    )
+    theme_series = df.get("Common Core: Theme")
+    category_series = df.get("Categoría")
+    tag_series = df.get("Etiqueta")
+    theme_group = theme_series if theme_series is not None else pd.Series(index=df.index, dtype=object)
+    if category_series is not None:
+        theme_group = theme_group.fillna(category_series)
+    if tag_series is not None:
+        theme_group = theme_group.fillna(tag_series)
+    df["theme_group"] = theme_group.fillna("Tema sin registro")
 
-    # Cálculo de completitud
     df["metadata_completeness"] = _compute_row_completeness(df)
     df["metadata_segment"] = pd.cut(
         df["metadata_completeness"],
@@ -188,36 +323,34 @@ def enrich_inventory(df: pd.DataFrame) -> pd.DataFrame:
         labels=["Crítico (<50%)", "Bajo (50%-75%)", "Medio (75%-90%)", "Óptimo (>90%)"],
     )
 
-    # Conversión numérica segura
-    for col in ["visits", "downloads"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-    df["views"] = df.get("visits", 0)
+    df["views"] = pd.to_numeric(df.get("Vistas"), errors="coerce")
+    df["downloads"] = pd.to_numeric(df.get("Descargas"), errors="coerce")
 
-    # Usamos la fecha mas cercana entre datos y metadatos para el cálculo.
-    date_candidates = [c for c in ["last_data_updated_date", "last_metadata_updated_date", "commoncore_lastupdate"] if c in df.columns]
-    
+    date_candidates = [
+        col
+        for col in [
+            "Fecha de última actualización de datos (UTC)",
+            "Fecha de última actualización de metadatos (UTC)",
+            "Common Core: Last Update",
+        ]
+        if col in df.columns
+    ]
+
     if date_candidates:
-        # Toma la fecha máxima por fila (ignora NaT automáticamente)
         df["effective_updated_date"] = df[date_candidates].max(axis=1)
-        # Si todo es NaT, usa creation_date como último recurso
-        if "creation_date" in df.columns:
-            df["effective_updated_date"] = df["effective_updated_date"].fillna(df["creation_date"])
+        if "Fecha de creación (UTC)" in df.columns:
+            df["effective_updated_date"] = df["effective_updated_date"].fillna(
+                df["Fecha de creación (UTC)"]
+            )
     else:
-        # Fallback extremo
         df["effective_updated_date"] = pd.Timestamp.utcnow()
 
-    # Referencia global para calcular "hace X días" (usando la fecha máxima encontrada en todo el dataset)
-    ref_date = df["effective_updated_date"].max()
-    if pd.isna(ref_date):
-        ref_date = pd.Timestamp.utcnow()
-
+    ref_date = df["effective_updated_date"].max() or pd.Timestamp.utcnow()
     delta = ref_date - df["effective_updated_date"]
-    df["days_since_update"] = delta.dt.days.fillna(9999) # Si falla, pone 9999 en lugar de error
-
+    df["days_since_update"] = delta.dt.days.fillna(9999)
     df["freshness_bucket"] = pd.cut(
         df["days_since_update"],
-        bins=[-1, 30, 90, 180, 365, 10000],
+        bins=[-1, 30, 90, 180, 365, 10_000],
         labels=[
             "≤30 días",
             "31-90 días",
@@ -227,11 +360,44 @@ def enrich_inventory(df: pd.DataFrame) -> pd.DataFrame:
         ],
     )
 
-    freq_col = "informacindedatos_frecuenciadeactualizacin"
-    if freq_col in df.columns:
-        df["update_frequency_norm"] = df[freq_col].astype(str).str.lower().str.strip().replace("nan", "sin registro")
+    if "Información de Datos: Frecuencia de Actualización" in df.columns:
+        df["update_frequency_norm"] = (
+            df["Información de Datos: Frecuencia de Actualización"]
+            .astype(str)
+            .str.lower()
+            .str.strip()
+            .fillna("sin registro")
+        )
     else:
         df["update_frequency_norm"] = "sin registro"
+
+    return df
+
+
+def _normalize_label(label: str) -> str:
+    cleaned = unicodedata.normalize("NFKD", str(label))
+    cleaned = "".join(ch for ch in cleaned if not unicodedata.combining(ch))
+    cleaned = re.sub(r"[^a-zA-Z0-9]+", "_", cleaned.lower())
+    return cleaned.strip("_")
+
+
+def _apply_aliases(df: pd.DataFrame) -> pd.DataFrame:
+    normalized_cols = {_normalize_label(col): col for col in df.columns}
+    rename_map = {}
+    for alias_key, target in COLUMN_ALIASES.items():
+        if target in df.columns:
+            continue
+        source_col = normalized_cols.get(alias_key)
+        if source_col:
+            rename_map[source_col] = target
+
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    if "name" not in df.columns:
+        fallback_col = normalized_cols.get("titulo") or normalized_cols.get("title")
+        if fallback_col and fallback_col in df.columns:
+            df["name"] = df[fallback_col]
 
     return df
 
@@ -264,7 +430,7 @@ def completeness_by_entity(df: pd.DataFrame) -> pd.DataFrame:
     pivot = (
         df.groupby("entidad")
         .agg(
-            assets=("uid", "count"),
+            assets=("UID", "count"),
             avg_completeness=("metadata_completeness", "mean"),
             median_views=("views", "median"),
         )
@@ -292,16 +458,17 @@ def theme_coverage(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("assets", ascending=False)
     )
 
+
 def metadata_gaps(df: pd.DataFrame, limit: int = 15) -> pd.DataFrame:
     columns = [
-        "uid",
+        "UID",
         "name",
         "entidad",
         "sector",
         "metadata_completeness",
-        "informacindedatos_frecuenciadeactualizacin",
-        "commoncore_contactemail",
-        "commoncore_license",
+        "Información de Datos: Frecuencia de Actualización",
+        "Common Core: Contact Email",
+        "Common Core: License",
     ]
     present_cols = [c for c in columns if c in df.columns]
     return (
@@ -333,9 +500,9 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
     text = (
         df["name"].fillna("")
         + " "
-        + df["description"].fillna("")
+        + df["Descripción"].fillna("")
         + " "
-        + df["tags"].fillna("")
+        + df["Etiqueta"].fillna("")
     ).str.lower()
     text = text.str.replace(r"<[^>]+>", " ", regex=True)
     text = text.str.replace(r"&nbsp;", " ", regex=True)
@@ -364,7 +531,7 @@ def run_basic_clustering(df: pd.DataFrame, n_clusters: int = 6) -> ClusterSummar
     counts = (
         df.groupby("cluster_id")
         .agg(
-            assets=("uid", "count"),
+            assets=("UID", "count"),
             avg_completeness=("metadata_completeness", "mean"),
             median_views=("views", "median"),
         )
@@ -460,11 +627,11 @@ def _build_text_corpus(df: pd.DataFrame) -> pd.Series:
     combined = (
         df["name"].fillna("")
         + " "
-        + df["description"].fillna("")
+        + df["Descripción"].fillna("")
         + " "
-        + df["tags"].fillna("")
+        + df["Etiqueta"].fillna("")
         + " "
-        + df["category"].fillna("")
+        + df["Categoría"].fillna("")
         + " "
         + df["theme_group"].fillna("")
     ).str.lower()
@@ -475,10 +642,66 @@ def _build_text_corpus(df: pd.DataFrame) -> pd.Series:
     return combined
 
 
+def _filter_search_scope(
+    df: pd.DataFrame, allowed_types: Optional[Sequence[str]] = ("dataset",)
+) -> pd.DataFrame:
+    """
+    Restringe el universo de búsqueda a datasets públicos con UID válido.
+
+    - type/Tipo == "dataset"
+    - Excluye UIDs con formato "uid:<n>" o vacíos
+    - publication_storage/Público marcado como público
+    """
+    filtered = df.copy()
+
+    type_column = "type" if "type" in filtered.columns else "Tipo" if "Tipo" in filtered.columns else None
+    if allowed_types is not None and type_column:
+        allowed = {t.lower() for t in allowed_types}
+        filtered = filtered[filtered[type_column].fillna("").str.lower().isin(allowed)]
+
+    if "UID" in filtered.columns:
+        uid_series = filtered["UID"].astype(str)
+        valid_uid = uid_series.str.strip().ne("") & ~uid_series.str.match(
+            r"uid:\d+$", case=False, na=False
+        )
+        filtered = filtered[valid_uid]
+
+    if "publication_storage" in filtered.columns:
+        storage = filtered["publication_storage"].fillna("").str.lower()
+        filtered = filtered[storage.isin({"publico", "public"})]
+    elif "Público" in filtered.columns:
+        filtered = filtered[filtered["Público"].fillna("").str.lower().eq("public")]
+
+    return filtered
+
+
+def get_dataset_by_uid(uid: str, df: pd.DataFrame) -> pd.DataFrame:
+    """Devuelve el dataset que coincide con el UID, aplicando el filtro de alcance."""
+    uid = (uid or "").strip().lower()
+    if not uid:
+        return pd.DataFrame()
+
+    scoped = _filter_search_scope(df, allowed_types=None)
+    if "UID" not in scoped.columns or scoped.empty:
+        return pd.DataFrame()
+
+    matches = scoped[scoped["UID"].fillna("").str.lower() == uid]
+    return matches
+
+
+def get_public_scope(df: pd.DataFrame) -> pd.DataFrame:
+    """Devuelve el universo filtrado para reportería masiva (UID válido y público)."""
+    return _filter_search_scope(df, allowed_types=None)
+
+
 def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFrame:
     """Búsqueda aproximada usando TF-IDF; fallback a filtro por palabras clave."""
     query = (query or "").strip()
     if not query:
+        return pd.DataFrame()
+
+    df = _filter_search_scope(df)
+    if df.empty:
         return pd.DataFrame()
 
     corpus = _build_text_corpus(df)
@@ -525,7 +748,7 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
     results["days_since_update"] = results["days_since_update"].fillna(9999)
 
     columns = [
-        "uid",
+        "UID",
         "name",
         "entidad",
         "sector",
@@ -533,9 +756,23 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
         "metadata_completeness",
         "days_since_update",
         "update_frequency_norm",
-        "visits",
-        "downloads",
+        "Vistas",
+        "Descargas",
         "similarity",
+        "Descripción",       
+        "url",               
+        "Tipo",              
+        "type",              
+        "Dominio",           
+        "domain",            
+        "Licencia",          
+        "Common Core: License", 
+        "derived_view",      
+        "Categoría",         
+        "row_count",         
+        "api_endpoint",      
+        "Público",           
+        "Common Core: Public Access Level"
     ]
     present_cols = [c for c in columns if c in results.columns]
 
@@ -561,8 +798,8 @@ def build_search_report(
         "Hallazgo sólido" if confidence >= threshold else "Hallazgo aproximado"
     )
 
-    vistas = pd.to_numeric(top.get("visits"), errors="coerce")
-    descargas = pd.to_numeric(top.get("downloads"), errors="coerce")
+    vistas = pd.to_numeric(top.get("Vistas"), errors="coerce")
+    descargas = pd.to_numeric(top.get("Descargas"), errors="coerce")
     vistas_int = int(vistas) if pd.notna(vistas) else 0
     descargas_int = int(descargas) if pd.notna(descargas) else 0
 

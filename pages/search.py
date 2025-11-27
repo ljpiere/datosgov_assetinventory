@@ -20,6 +20,17 @@ def layout(df):
                 className="subtitle",
             ),
             build_search_section(search_table),
+            html.Div(
+                [
+                    html.Button(
+                        "Descargar Informe ASPA (Word)",
+                        id="btn-download-report",
+                        style={"display": "none"}
+                    ),
+                    dcc.Download(id="download-component")
+                ],
+                style={"marginTop": "20px", "textAlign": "center", "marginBottom": "30px"}
+            ),
             html.H3("Estado del inventario"),
             html.Div(cards, style=STYLES["metric_grid"]),
             dcc.Store(id="search-results-store"),

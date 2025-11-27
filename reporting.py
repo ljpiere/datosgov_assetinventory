@@ -6,11 +6,6 @@ No utiliza servicios externos para garantizar privacidad y control total sobre e
 No utiliza archivos de configuración para simplificar la implementación y despliegue del módulo.
 No se utilizan modelos de lenguaje para asegurar consistencia y evitar sesgos.
 
-- TAREAS PENDIENTES:
-CORREGIR ERROR CRÍTICO: Campos que al generar el informe no encuentra como correo de contacto.
-
-2. Auditar resultados
-3. cuadrar tabla bajo los estandares de mintic
 """
 from __future__ import annotations
 
@@ -1528,8 +1523,6 @@ def create_aspa_report(dataset_data: dict, entity_name: str) -> BytesIO:
 
 
 # Estilos de tabla específicos para el reporte ASPA 2025.
-
-# En reporting.py (aprox. línea 850)
 
 def _style_section_header(cell):
     p = cell.paragraphs[0]

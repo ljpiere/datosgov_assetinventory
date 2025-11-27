@@ -756,10 +756,12 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
 
     if re.match(uid_pattern, query.lower()):
         exact_match = get_dataset_by_uid(query, df)
-        results["similarity"] = 1.0
+        if not exact_match.empty:
+            results = exact_match.copy()
+            results["similarity"] = 1.0
 
-        present_cols = [c for c in columns if c in results.columns]
-        return results.loc[:, present_cols].reset_index(drop=True)
+            present_cols = [c for c in columns if c in results.columns]
+            return results.loc[:, present_cols].reset_index(drop=True)
 
     corpus = _build_text_corpus(df)
     scores = pd.Series(0.0, index=df.index)

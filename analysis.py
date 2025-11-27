@@ -49,6 +49,7 @@ METADATA_FIELDS = [
     "Información de Datos: Idioma",
     "Información de la Entidad: Nombre de la Entidad",
     "Common Core: Contact Email",
+    "email",
     "Common Core: License",
     "Common Core: Public Access Level",
 ]
@@ -146,14 +147,11 @@ COLUMN_ALIASES = {
     "informacion_de_datos_idioma": "Información de Datos: Idioma",
     "commoncore_contactemail": "Common Core: Contact Email",
     "common_core_contact_email": "Common Core: Contact Email",
+    "contact_email": "email", 
+    "email": "Contact email",
     "commoncore_license": "Common Core: License",
     "common_core_license": "Common Core: License",
 }
-
-import pandas as pd
-import requests
-import numpy as np
-from pathlib import Path
 
 def load_api(path: str, batch_size: int = 5000, offset: int = 0) -> pd.DataFrame:
     """ carga el inventario desde la API en modo batch 
@@ -293,9 +291,20 @@ def enrich_inventory(df: pd.DataFrame) -> pd.DataFrame:
         )
     else:
         df["public_access_level"] = "desconocido"
-    df["coherence_flag"] = (
-        df["is_public"] & df["public_access_level"].str.contains("public")
-    ) | (~df["is_public"] & ~df["public_access_level"].str.contains("public"))
+
+    if "type" in df.columns:
+        type_series = df["type"] = df["type"].astype(str).str.lower()
+    elif "Tipo" in df.columns:
+        type_series = df["Tipo"].astype(str).str.lower()
+    else:
+        type_series = pd.Series("", index=df.index)
+    
+    is_federated = type_series.str.contains("federated_href", na=False)
+    # si es federado comprueba si es publico
+    strict_check = (df["is_public"] & df["public_access_level"].str.contains("public")|~df["is_public"] & ~df["public_access_level"].str.contains("public"))
+
+    # para no penalizar los archivos no federados
+    df["coherence_flag"] = (~is_federated) | strict_check
 
     entidad_series = df.get("Información de la Entidad: Nombre de la Entidad")
     owner_series = df.get("Dueño")
@@ -468,7 +477,9 @@ def metadata_gaps(df: pd.DataFrame, limit: int = 15) -> pd.DataFrame:
         "metadata_completeness",
         "Información de Datos: Frecuencia de Actualización",
         "Common Core: Contact Email",
+        "email",
         "Common Core: License",
+        "Common Core: Public Access Level"
     ]
     present_cols = [c for c in columns if c in df.columns]
     return (
@@ -755,6 +766,7 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
         "theme_group",
         "metadata_completeness",
         "days_since_update",
+        "coherence_flag",
         "update_frequency_norm",
         "Vistas",
         "Descargas",
@@ -767,12 +779,20 @@ def search_inventory(query: str, df: pd.DataFrame, top_k: int = 8) -> pd.DataFra
         "domain",            
         "Licencia",          
         "Common Core: License", 
+        "Common Core: Public Access Level",
         "derived_view",      
         "Categoría",         
         "row_count",         
         "api_endpoint",      
         "Público",           
-        "Common Core: Public Access Level"
+        "Common Core: Public Access Level",
+        "Common Core: Contact Email",
+        "email",
+        "Información de Datos: Cobertura Geográfica",
+        "Etiqueta",
+        "Información de Datos: Frecuencia de Actualización",
+        "Información de Datos: Idioma",
+        "Información de la Entidad: Nombre de la Entidad",
     ]
     present_cols = [c for c in columns if c in results.columns]
 

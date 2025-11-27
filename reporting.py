@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from analysis import load_api, load_inventory
+from analysis import load_api
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -27,7 +27,6 @@ import gc
 import math
 import textwrap
 from io import BytesIO
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 import csv
 from datetime import datetime
@@ -51,21 +50,22 @@ LOGO_IMG_PATH = "img/logo_min_tic.png"
 
 
 REPORT_METADATA_FIELDS: Sequence[str] = (
-    "uid",
+    "UID",
     "name",
-    "description",
+    "Descripción",
     "entidad",
     "sector",
     "theme_group",
-    "tags",
-    "category",
-    "audience",
-    "commoncore_publicaccesslevel",
-    "commoncore_contactemail",
-    "commoncore_license",
-    "informacindedatos_coberturageogrfica",
-    "informacindedatos_idioma",
-    "informacindedatos_frecuenciadeactualizacin",
+    "Etiqueta",
+    "Categoría",
+    "Público",
+    "Common Core: Public Access Level",
+    "Common Core: Contact Email",
+    "email",
+    "Common Core: License",
+    "Información de Datos: Cobertura Geográfica",
+    "Información de Datos: Idioma",
+    "Información de Datos: Frecuencia de Actualización",
     "update_frequency_norm",
 )
 
@@ -209,14 +209,14 @@ def _calc_actualidad(row: pd.Series) -> Tuple[float, str, str]:
 
     # Vigente (está dentro del límite de días para esa frecuencia)
     if days_diff <= limit_days:
-        return score, f"Vigente (Hace {days_int} días)", ""
+        return score, f"Vigente", ""
     
     # Vencido
     else:
         recomendacion = (
-            f"El activo no ha sido actualizado según la frecuencia declarada, por lo tanto se encuentra vencido hace {days_int} días. Se recomienda revisar."
+            f"El activo no ha sido actualizado según la frecuencia declarada, por lo tanto se encuentra vencido, no se ha actualizado hace {days_int} días. Se recomienda revisar."
         )
-        return score, f"Vencido (Hace {days_int} días)", recomendacion
+        return score, f"Vencido", recomendacion
 
 
 # ==============================
@@ -369,7 +369,7 @@ def _score_disponibilidad(record: Dict[str, Any]) -> float:
 def _score_trazabilidad(record: Dict[str, Any]) -> float:
     issued = _smart_get(record, ["commoncore_issued", "Common Core: Issued","Fecha de Creación de la Entidad Federando"],"")
     last_update = _smart_get(record, ["commoncore_lastupdate", "Common Core: Last Update","Fecha de Actualización de la Entidad Federando"],"")
-    contact = _smart_get(record, ["commoncore_contactemail", "Common Core: Contact Email","Correo Electrónico de la Entidad Federando","contact_email", "Correo Electrónico de Contacto","El correo electrónico de contacto para el recurso"],"")
+    contact = _smart_get(record, ["email","Common Core: Contact Email","commoncore_contactemail","Correo Electrónico de la Entidad Federando","contact_email", "Correo Electrónico de Contacto","El correo electrónico de contacto para el recurso"],"")
     has_issued = bool(issued)
     has_update = bool(last_update)
     has_contact = bool(contact)
@@ -557,9 +557,9 @@ def build_agent_analysis(record: Dict[str, Any]) -> Dict[str, Any]:
     access_level = str(_smart_get(record, ["commoncore_publicaccesslevel", "Common Core: Public Access Level","Acceso al Recurso de la Entidad Federando"], "desconocido")).lower()
     is_public = str(_smart_get(record, ["audience", "Público"], "")).lower() == "public"
 
-    has_contact = bool(_smart_get(record, ["commoncore_contactemail", "Common Core: Contact Email","Correo Electrónico de la Entidad Federando","contact_email", "Correo Electrónico de Contacto","El correo electrónico de contacto para el recurso"], ""))
+    has_contact = bool(_smart_get(record, ["email","Common Core: Contact Email","commoncore_contactemail","Correo Electrónico de la Entidad Federando","contact_email", "Correo Electrónico de Contacto","El correo electrónico de contacto para el recurso"], ""))
     print("Correo de contacto: ", has_contact)
-    has_license = bool(_smart_get(record, ["commoncore_license", "Common Core: License","Licencia de la Plataforma de la Entidad Federando (Creative Commons)","license","Licencia","La licencia del recurso"], ""))
+    has_license = bool(_smart_get(record, ["Common Core: License","commoncore_license","Licencia de la Plataforma de la Entidad Federando (Creative Commons)","license","Licencia","La licencia del recurso"], ""))
     desc_len = len(_smart_get(record, ["description", "Descripción","La descripción del recurso"], ""))
 
     critical_fields = [
@@ -571,6 +571,7 @@ def build_agent_analysis(record: Dict[str, Any]) -> Dict[str, Any]:
         "Información de Datos: Idioma",
         "Información de la Entidad: Nombre de la Entidad",
         "Common Core: Contact Email",
+        "email",
         "Common Core: License",
         "Common Core: Public Access Level",
     ]
@@ -755,7 +756,8 @@ def build_cut_csv(df) -> str:
         "update_frequency_norm",
         "Público",
         "Common Core: Public Access Level",
-        "Fecha de última actualización de datos (UTC)"
+        "Fecha de última actualización de datos (UTC)",
+        "Common Core: Contact Email"
     ]
     meta_fields = [f for f in REPORT_METADATA_FIELDS if f not in base_fields]
     fields = base_fields + meta_fields + metric_names + [
@@ -929,8 +931,8 @@ def calculate_pdf_criteria(row: pd.Series) -> dict:
     sc_cred = _score_credibilidad(record)
     # Validación extra para comentarios específicos de credibilidad
     if sc_cred < 8.0:
-        contact = _smart_get(record, ["commoncore_contactemail", "contact_email", "email"])
-        license_val = _smart_get(record, ["license", "commoncore_license", "licencia"])
+        contact = _smart_get(record, ["email","Common Core: Contact Email","commoncore_contactemail", "contact_email", "email"])
+        license_val = _smart_get(record, ["Common Core: License","license", "commoncore_license","licencia"])
         missing_cred = []
         if not contact: missing_cred.append("email de contacto")
         if not license_val or len(str(license_val)) < 3: missing_cred.append("licencia explícita")
@@ -1387,7 +1389,10 @@ def create_aspa_report(dataset_data: dict, entity_name: str) -> BytesIO:
     domain = _smart_get(dataset_data, ["domain", "Dominio", "attribution_link"], "www.datos.gov.co")
     coverage = _smart_get(dataset_data,["Información de Datos: Cobertura Geográfica", "informacindedatos_coberturageogrfica", "spatial", "Cobertura Geográfica"], "No registrada")
     desc_full = _smart_get(dataset_data, ["Descripción", "description", "notes", "about"], "Sin descripción")
+    contact = _smart_get(dataset_data, ["email","contact_email","Common Core: Contact Email","commoncore_contactemail"])
     desc_visual = desc_full[:400] + "..." if len(desc_full) > 400 else desc_full
+
+    print("dataframe: ", dataset_data)
 
     filas_reporte = [
         ("INFORMACIÓN GENERAL DEL RECURSO", "", True),
@@ -1396,10 +1401,10 @@ def create_aspa_report(dataset_data: dict, entity_name: str) -> BytesIO:
         ("Entidad Propietaria:", entity_name, False),
         ("UID (Identificador):", str(uid), False),
         ("URL del Recurso:", final_url, False),
-        
         ("DETALLES TÉCNICOS Y METADATOS", "", True),
         ("Tipo de Recurso:", type_res, False),
         ("Dominio:", domain, False),
+        ("Correo electrónico de contacto:", contact, False),
         ("Licencia:", lic_text, False),
         ("Cobertura Geográfica: ", coverage, False),
         ("¿Es Recurso Derivado?:", derived_text, False),
@@ -1524,13 +1529,18 @@ def create_aspa_report(dataset_data: dict, entity_name: str) -> BytesIO:
 
 # Estilos de tabla específicos para el reporte ASPA 2025.
 
+# En reporting.py (aprox. línea 850)
+
 def _style_section_header(cell):
     p = cell.paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = p.runs[0]
+    if not p.runs:
+        run = p.add_run()
+    else:
+        run = p.runs[0]
     run.bold = True
-    run.font.color.rgb = RGBColor(255, 255, 255)
-    _set_cell_background(cell, "1F4E78")
+    run.font.color.rgb = RGBColor(0, 0, 0)
+    _set_cell_background(cell, "D9D9D9")
 
 def _style_score_cell(cell, score):
     p = cell.paragraphs[0]

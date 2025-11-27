@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 from dash import Input, Output, State, callback_context, dcc, html, no_update
 from dash import dash_table
+from datetime import datetime
 
 from analysis import (
     build_search_report,
@@ -145,8 +146,9 @@ def register_search_callbacks(app, df):
             docx_buffer = create_aspa_report(dataset, entity_name)
             
             # Definir nombre del archivo
-            uid_str = str(dataset.get('uid', 'report'))
-            filename = f"Informe_ASPA_2025_{uid_str}.docx"
+            uid_str = str(dataset.get('UID', 'report'))
+            now = datetime.now()
+            filename = f"Informe_ASPA_{now.year}_{uid_str}.docx"
             
             # Enviar al componente dcc.Download
             return dcc.send_bytes(docx_buffer.getvalue(), filename)

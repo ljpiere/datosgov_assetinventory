@@ -637,7 +637,7 @@ def build_pdf_document(
     margin = 50
     y = height - margin
 
-    title = f"Reporte de dataset · UID {_smart_get(record, ["uid", "UID","La identificación única del recurso"], "")}"
+    title = f"Reporte de dataset · UID {_smart_get(record, ['UID', 'uid', 'La identificación única del recurso'], '')}"
     c.setFont("Helvetica-Bold", 14)
     c.drawString(margin, y, title)
     y -= 18
@@ -858,7 +858,8 @@ def _calculate_conformity(row: pd.Series) -> tuple:
     Verifica la cantidad de datos nulos del set de datos.
     Verifica el tipo de dato y su correspondencia.
     """
-    url = f"https://www.datos.gov.co/resource/{row.get("UID")}.json"
+
+    url = f"https://www.datos.gov.co/resource/{row.get('UID')}.json"
     temp_df = load_api(url)
     if temp_df is None or temp_df.empty:
         return 0, ["Error de análisis: el conjunto de datos es privado o no se encuentra disponible."]

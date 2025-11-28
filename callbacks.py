@@ -419,3 +419,94 @@ def register_page_routing(app, df):
         return welcome_layout(df)
 
     return app
+
+def register_chat_callbacks(app, orbi_agent):
+    @app.callback(
+        Output("orbi-chat-window", "style"),
+        [Input("orbi-toggle-btn", "n_clicks"),
+         Input("orbi-close-btn", "n_clicks")],
+        State("orbi-chat-window", "style"),
+        prevent_initial_call=True
+    )
+    def toggle_chat(n_open, n_close, current_style):
+        ctx = callback_context
+        if not ctx.triggered:
+            return no_update
+            
+        button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+        base_style = {
+            "position": "fixed",
+            "bottom": "90px",
+            "right": "20px",
+            "width": "350px",
+            "backgroundColor": "white",
+            "borderRadius": "10px",
+            "boxShadow": "0 0 15px rgba(0,0,0,0.2)",
+            "zIndex": "1001",
+            "display": "block"
+        }
+
+        if button_id == "orbi-toggle-btn":
+            # Si está visible, lo ocultamos. Si no, lo mostramos.
+            if current_style and current_style.get("display") == "block":
+                return {"display": "none"}
+            return base_style
+            
+        elif button_id == "orbi-close-btn":
+            return {"display": "none"}
+            
+        return no_update
+
+    @app.callback(
+        [Output("orbi-chat-history", "children"),
+         Output("orbi-user-input", "value"),
+         Output("orbi-conversation-store", "data"),
+         Output("orbi-loading-output", "children")],
+        [Input("orbi-send-btn", "n_clicks"),
+         Input("orbi-user-input", "n_submit")],
+        [State("orbi-user-input", "value"),
+         State("orbi-conversation-store", "data")],
+        prevent_initial_call=True
+    )
+    def update_conversation(n_clicks, n_submit, user_text, history):
+        if not user_text:
+            return no_update, no_update, no_update, no_update
+
+        # Inicializar historial si está vacío
+        history = history or []
+
+        history.append({"role": "user", "content": user_text})
+        
+        response_text = "Lo siento, Orbi no está disponible en este momento."
+        
+        if orbi_agent:
+            try:
+                response_text = orbi_agent.chat(user_text, history)
+            except Exception as e:
+                response_text = f"Error procesando solicitud: {str(e)}"
+        else:
+            response_text = "El modelo no se cargó correctamente (revisa logs de consola)."
+
+        history.append({"role": "orbi", "content": response_text})
+
+        messages_html = []
+        for msg in history:
+            is_user = msg["role"] == "user"
+            style_bubble = {
+                "padding": "10px",
+                "borderRadius": "10px",
+                "maxWidth": "80%",
+                "fontSize": "0.9rem",
+                "alignSelf": "flex-end" if is_user else "flex-start",
+                "backgroundColor": "#e1f5fe" if is_user else "#f1f1f1",
+                "color": "#003366" if is_user else "#333",
+                "borderBottomRightRadius": "0" if is_user else "10px",
+                "borderBottomLeftRadius": "10px" if is_user else "0",
+            }
+            
+            messages_html.append(html.Div(msg["content"], style=style_bubble))
+
+        return messages_html, "", history, ""
+
+    return app

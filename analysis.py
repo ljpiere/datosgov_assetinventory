@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
+from ctransformers import AutoModelForCausalLM as CAutoModel
 
 import numpy as np
 import pandas as pd
@@ -21,6 +22,16 @@ import requests
 import unicodedata
 import time
 import pickle
+import os
+from huggingface_hub import login
+import gc
+import torch
+from pathlib import Path
+from typing import Dict, List, Optional
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sentence_transformers import SentenceTransformer, util
+from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+login()
 
 try:
     from sklearn.cluster import KMeans
@@ -29,14 +40,74 @@ except ImportError:  # pragma: no cover - se maneja en runtime
     KMeans = None
     TfidfVectorizer = None
 
-
-
-
 # Guardará el dataframe localmente para evitar recargas innecesarias.
 CACHE_DIR = Path("dataframe")
 CACHE_FILE = CACHE_DIR / "inventory_cache.pkl"
 
 URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
+
+
+GUIA_CALIDAD_TEXT = """
+TITULO: Guía de estándares de CALIDAD E INTEROPERABILIDAD de los Datos Abiertos (MinTIC Colombia)
+
+INTRODUCCION:
+Para que los datos abiertos generen valor social y económico, deben cumplir criterios de calidad e interoperabilidad.
+La norma base es ISO/IEC 25012. Dimensiones clave: Precisión, Integridad, Validez, Consistencia, Unicidad, Actualidad.
+
+CRITERIOS DE CALIDAD (17 Criterios):
+1. Accesibilidad: Sin requisitos de registro, contraseñas o software especial.
+2. Actualidad: Los datos reflejan el estado más reciente según su periodicidad.
+3. Completitud: Todos los campos obligatorios están diligenciados (ningún campo crítico en blanco).
+4. Comprensibilidad: Datos interpretables, encabezados claros, glosarios.
+5. Conformidad: Cumplimiento de estándares (plantillas MinTIC).
+6. Confidencialidad: No publicar datos personales o sensibles sin anonimizar (Ley 1581 de 2012).
+7. Consistencia: Datos coherentes y sin contradicción (misma codificación).
+8. Credibilidad: Fuente oficial declarada y responsable visible.
+9. Disponibilidad: Datos en línea 24/7 sin caídas.
+10. Eficiencia: Plataforma permite descargas con buen rendimiento.
+11. Exactitud: Datos diligenciados correctamente (sintáctica y semántica).
+12. Portabilidad: Formatos abiertos (CSV, JSON) sin bloqueos.
+13. Precisión: Nivel de desagregación adecuado al original.
+14. Recuperabilidad: Copias de seguridad y control de versiones.
+15. Relevancia: Datos útiles para la toma de decisiones.
+16. Trazabilidad: Histórico de cambios y fechas documentadas.
+17. Unicidad: Sin registros duplicados (filas o columnas).
+
+ERRORES COMUNES Y CÓDIGOS (Validación):
+- ERR001 (Metadata errada): Título o descripción mal nombrados o poco claros.
+- ERR002 (Metadata vacía): Falta completar campos obligatorios en la metadata.
+- ERR003 (Entidad): El nombre de usuario no está vinculado a la entidad oficial.
+- ERR004 (Sin filas): El conjunto de datos está vacío (0 registros).
+- ERR005 (Pocas filas): Menos de 50 registros (afecta reutilización). Excepción: listados completos pequeños.
+- ERR005_01 (Agregado): Datos con pocas filas y además agregados (totales), no desagregados.
+- ERR007 (Filas vacías): Conjunto con campos vacíos o basura.
+- ERR008 (Columna única): El dataset tiene una sola columna.
+- ERR008_1 (Pocas columnas): Menos de 3 columnas.
+- ERR008_2 (Columnas mal nombradas): Nombres como "Unnamed Column", "Column1".
+- ERR009 (Geolocalización): Falta latitud/longitud cuando hay direcciones.
+- ERR010 (Enlace inválido): Link externo roto o apunta a un PDF/DOC (no estructurado).
+- ERR011 (Clasificación): Datos divididos por periodos que deberían estar unidos.
+- ERR012 (Subconjunto maestro): Publicar fragmentos de datos que ya existen en un dataset nacional (ej: SECOP, ICFES).
+- ERR013 (Mal cargado): Error técnico en la carga.
+- ERR015 (Desactualizado): La fecha actual supera la frecuencia de actualización prometida.
+- ERR017 (Enlace roto): URL externa no funciona.
+- ERR018 (Agregaciones): El dataset presenta totales en lugar de datos crudos.
+- ITA_1, ITA_2, ITA_3: Errores relacionados con la Ley de Transparencia (activos de información, esquemas de publicación).
+
+SELLOS DE CALIDAD:
+- Sello 0: No cumple requisitos mínimos.
+- Sello 1: Cumple criterios básicos (Actualidad 10, Consistencia/Completitud > 8, Licencia válida).
+- Sello 2: Cumple Sello 1 + Formatos estándar + Incentivo de uso (vistas/descargas).
+- Sello 3 (Máximo): Documentación completa (URL), Incentivo de uso avanzado, Mejora continua.
+
+POTENCIAL DE USO (CTR):
+Se mide con el CTR (Click Through Rate) = Número de Descargas / Número de Vistas.
+Ayuda a identificar qué tan atractiva es la información.
+
+MARCO DE INTEROPERABILIDAD:
+Dominios: Político-Legal, Organizacional, Semántico (Lenguaje común), Técnico.
+"""
+
 
 METADATA_FIELDS = [
     "name",
@@ -846,3 +917,138 @@ def build_search_report(
 
 Selecciona otra fila en la tabla para actualizar el reporte; se listan hasta {len(results)} coincidencias ordenadas por similitud.
 """.strip()
+
+
+# CLASE ORBI
+
+class OrbiAssistant:
+    def __init__(self, model_id="google/gemma-2-2b-it",alternative="bartowski/gemma-2-2b-it-GGUF"):
+        # carga el modelo gemma
+        print("\nInicializando ORBI...")
+
+        # Cargar Base de Conocimiento (RAG)
+        print("Indexando Guía de Calidad...")
+        self.guide_chunks = [c.strip() for c in GUIA_CALIDAD_TEXT.split('\n\n') if c.strip()]
+        self.embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+        self.guide_embeddings = self.embedder.encode(self.guide_chunks, convert_to_tensor=True)
+
+        # Cargar Inventario de Datos
+        print("Cargando Inventario de Datos...")
+        self.inventory_df = load_inventory()
+
+        # Cargar Modelo Gemma
+        print(f"Descargando y cargando modelo LLM ({model_id})...")
+        try:
+            # GPU con BitsAndBytes 
+            print("Intentando carga con GPU (4-bit)...")
+            bnb_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+                bnb_4bit_compute_dtype=torch.float16
+            )
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                quantization_config=bnb_config,
+                device_map="auto",
+                low_cpu_mem_usage=True
+            )
+            print("Modelo cargado exitosamente en GPU.")
+            
+        except Exception as e:
+            print(f"Advertencia: Falló la carga en GPU/4-bit. Causa: {e}")
+            try:
+                self.model = CAutoModel.from_pretrained(
+                    alternative,
+                    model_file="gemma-2-2b-it-Q4_K_M.gguf", 
+                    model_type="gemma",
+                    gpu_layers=50, # Pasa todo a la GPU
+                    context_length=2048
+                )
+                
+                # 2. Cargamos el Tokenizer de HuggingFace por separado
+                # (ctransformers tiene el suyo, pero para compatibilidad con tu código usamos este)
+                self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+                
+                print("Modelo cargado exitosamente en GPU (Modo GGUF).")
+            except Exception as e:
+                print(f"Advertencia: Falló la carga en GPU. Causa: {e}")
+                print("Cambiando a modo CPU...")
+                try:
+                    # Carga estándar en CPU
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        model_id,
+                        device_map="cpu", # Forzamos CPU
+                        torch_dtype=torch.float32
+                    )
+                    print(">>> Modelo cargado exitosamente en modo CPU.")
+                except Exception as e2:
+                    print(f"Error crítico: No se pudo cargar el modelo ni en GPU ni en CPU.")
+                    print(f"Detalle del error: {e2}")
+                    # Aquí SÍ lanzamos el error porque fallaron ambos métodos
+                    raise e2
+
+    def _retrieve_guide_info(self, query):
+        """Busca información en la guía normativa."""
+        if not self.guide_chunks: return None
+        query_emb = self.embedder.encode(query, convert_to_tensor=True)
+        scores = util.cos_sim(query_emb, self.guide_embeddings)[0]
+        top_results = torch.topk(scores, k=3)
+
+        context = []
+        for score, idx in zip(top_results.values, top_results.indices):
+            if score > 0.25: # Umbral de relevancia
+                context.append(self.guide_chunks[idx])
+        return "\n".join(context) if context else None
+
+    def _generate_response(self, system_prompt, user_query):
+        """Genera respuesta con Gemma."""
+        prompt = f"""<start_of_turn>user
+{system_prompt}
+
+PREGUNTA DEL USUARIO:
+{user_query}
+
+Responde de forma clara y útil como Orbi.<end_of_turn>
+<start_of_turn>model
+"""     
+        device = self.model.device 
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+        with torch.no_grad():
+            outputs = self.model.generate(**inputs, max_new_tokens=600, temperature=0.3)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1]
+
+    def chat(self, message, history):
+        """Función principal que conecta con Gradio."""
+        gc.collect()
+        torch.cuda.empty_cache()
+
+        msg_lower = message.lower()
+
+        # 1. Router: ¿Es sobre Calidad/Errores?
+        quality_keywords = ["error", "err", "calidad", "criterio", "norma", "guía", "sello", "iso", "interoperabilidad"]
+        if any(k in msg_lower for k in quality_keywords):
+            context = self._retrieve_guide_info(message)
+            if context:
+                sys_prompt = f"Eres Orbi, experto en calidad de datos del gobierno colombiano. Usa este contexto de la guía oficial:\n\n{context}"
+                return self._generate_response(sys_prompt, message)
+            else:
+                return "No encontré ese tema específico en la Guía de Calidad. ¿Podrías darme el código de error (ej: ERR005) o el nombre del criterio?"
+
+        # 2. ¿Es sobre Búsqueda de Datos?
+        # Por defecto, si no es calidad, asumimos que busca datos
+        results = search_inventory(message, self.inventory_df)
+
+        if not results.empty:
+            # Construir contexto del inventario
+            data_context = "He encontrado los siguientes conjuntos de datos en datos.gov.co:\n"
+            for i, row in results.iterrows():
+                data_context += f"- Nombre: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Descripción: {str(row.get('Descripción', ''))[:100]}...\n  UID: {row.get('UID', 'N/A')}\n\n"
+
+            sys_prompt = f"Eres Orbi, un asistente de datos abiertos. El usuario busca información. Usa estos datasets encontrados para responder:\n\n{data_context}"
+            return self._generate_response(sys_prompt, message)
+
+        # 3. Conversación general
+        return self._generate_response("Eres Orbi, un asistente amable de datos abiertos de Colombia. Si no sabes la respuesta, sugiere buscar datos o consultar la guía de calidad.", message)

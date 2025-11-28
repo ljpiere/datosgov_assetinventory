@@ -58,7 +58,6 @@ STYLES = {
     },
 }
 
-
 def metric_card(title: str, value: str, detail: str) -> html.Div:
     return html.Div(
         [

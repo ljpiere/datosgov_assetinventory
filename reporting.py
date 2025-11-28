@@ -11,6 +11,7 @@ from datetime import datetime
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
 
     REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover - dependencia opcional
@@ -421,11 +422,56 @@ def build_pdf_document(
     if not REPORTLAB_AVAILABLE:
         raise ImportError("reportlab no está instalado.")
 
+    base_dir = Path(__file__).resolve().parent
+    logo_path = base_dir / "docs" / "logo.png"
+    footer_path = base_dir / "docs" / "endapage.png"
+    logo_reader = ImageReader(str(logo_path)) if logo_path.exists() else None
+    footer_reader = ImageReader(str(footer_path)) if footer_path.exists() else None
+
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     margin = 50
     y = height - margin
+
+    def _draw_branding():
+        """Coloca logo arriba derecha y franja de pie de página; se llama en cada página."""
+        # Logo
+        if logo_reader is not None:
+            try:
+                img_w, img_h = logo_reader.getSize()
+                target_w = 35.0  # m�s peque�o para evitar pixelado
+                target_h = target_w * (img_h / img_w)
+                c.drawImage(
+                    logo_reader,
+                    x=width - margin - target_w,
+                    y=height - margin - target_h + 10,  # levemente separado del borde
+                    width=target_w,
+                    height=target_h,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+            except Exception:
+                pass
+        # Pie de página
+        if footer_reader is not None:
+            try:
+                img_w, img_h = footer_reader.getSize()
+                target_w = width - (0.6 * margin)  # aún m�s ancho que el contenido
+                target_h = target_w * (img_h / img_w)
+                c.drawImage(
+                    footer_reader,
+                    x=margin * 0.3,
+                    y=max(0, 2 - target_h * 0.02),  # casi al borde inferior
+                    width=target_w,
+                    height=target_h,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+            except Exception:
+                pass
+
+    _draw_branding()
 
     title = f"Reporte de dataset · UID {record.get('UID', '')}"
     c.setFont("Helvetica-Bold", 14)
@@ -464,6 +510,7 @@ def build_pdf_document(
             c.showPage()
             y = height - margin
             c.setFont("Helvetica", 10)
+            _draw_branding()
         name = metric.get("Métrica", "Métrica")
         score = metric.get("Puntaje", "N/D")
         definition = metric.get("Definición", "")
@@ -489,6 +536,7 @@ def build_pdf_document(
             c.showPage()
             y = height - margin
             c.setFont("Helvetica", 10)
+            _draw_branding()
 
         wrapped = textwrap.wrap(f"{pair['Campo']}: {pair['Valor']}", 100)
         for line in wrapped:

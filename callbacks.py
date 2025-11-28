@@ -422,10 +422,10 @@ def register_page_routing(app, df):
 
 def register_chat_callbacks(app, orbi_agent):
     @app.callback(
-        Output("orbi-chat-window", "style"),
-        [Input("orbi-toggle-btn", "n_clicks"),
-         Input("orbi-close-btn", "n_clicks")],
-        State("orbi-chat-window", "style"),
+        Output("orbit-chat-window", "style"),
+        [Input("orbit-toggle-btn", "n_clicks"),
+         Input("orbit-close-btn", "n_clicks")],
+        State("orbit-chat-window", "style"),
         prevent_initial_call=True
     )
     def toggle_chat(n_open, n_close, current_style):
@@ -447,26 +447,26 @@ def register_chat_callbacks(app, orbi_agent):
             "display": "block"
         }
 
-        if button_id == "orbi-toggle-btn":
+        if button_id == "orbit-toggle-btn":
             # Si está visible, lo ocultamos. Si no, lo mostramos.
             if current_style and current_style.get("display") == "block":
                 return {"display": "none"}
             return base_style
             
-        elif button_id == "orbi-close-btn":
+        elif button_id == "orbit-close-btn":
             return {"display": "none"}
             
         return no_update
 
     @app.callback(
-        [Output("orbi-chat-history", "children"),
-         Output("orbi-user-input", "value"),
-         Output("orbi-conversation-store", "data"),
-         Output("orbi-loading-output", "children")],
-        [Input("orbi-send-btn", "n_clicks"),
-         Input("orbi-user-input", "n_submit")],
-        [State("orbi-user-input", "value"),
-         State("orbi-conversation-store", "data")],
+        [Output("orbit-chat-history", "children"),
+         Output("orbit-user-input", "value"),
+         Output("orbit-conversation-store", "data"),
+         Output("orbit-loading-output", "children")],
+        [Input("orbit-send-btn", "n_clicks"),
+         Input("orbit-user-input", "n_submit")],
+        [State("orbit-user-input", "value"),
+         State("orbit-conversation-store", "data")],
         prevent_initial_call=True
     )
     def update_conversation(n_clicks, n_submit, user_text, history):
@@ -478,7 +478,7 @@ def register_chat_callbacks(app, orbi_agent):
 
         history.append({"role": "user", "content": user_text})
         
-        response_text = "Lo siento, Orbi no está disponible en este momento."
+        response_text = "Lo siento, Orbit no está disponible en este momento."
         
         if orbi_agent:
             try:
@@ -488,7 +488,7 @@ def register_chat_callbacks(app, orbi_agent):
         else:
             response_text = "El modelo no se cargó correctamente (revisa logs de consola)."
 
-        history.append({"role": "orbi", "content": response_text})
+        history.append({"role": "orbit", "content": response_text})
 
         messages_html = []
         for msg in history:

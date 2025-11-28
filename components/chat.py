@@ -4,8 +4,8 @@ def render_chat_interface():
     return html.Div([
         # Botón flotante ¿
         html.Button(
-            "Orbi",
-            id="orbi-toggle-btn",
+            "Orbit",
+            id="orbit-toggle-btn",
             style={
                 "position": "fixed",
                 "bottom": "20px",
@@ -26,14 +26,14 @@ def render_chat_interface():
 
         # Ventana del Chat 
         html.Div(
-            id="orbi-chat-window",
+            id="orbit-chat-window",
             style={"display": "none"}, 
             children=[
                 # Encabezado
                 html.Div(
                     children=[
-                        html.Span("Asistente Orbi", style={"fontWeight": "bold"}),
-                        html.Span("✕", id="orbi-close-btn", style={"cursor": "pointer", "float": "right", "fontWeight": "bold"})
+                        html.Span("Asistente Orbit", style={"fontWeight": "bold"}),
+                        html.Span("✕", id="orbit-close-btn", style={"cursor": "pointer", "float": "right", "fontWeight": "bold"})
                     ],
                     style={
                         "backgroundColor": "#003366",
@@ -46,7 +46,7 @@ def render_chat_interface():
                 
                 # Cuerpo 
                 html.Div(
-                    id="orbi-chat-history",
+                    id="orbit-chat-history",
                     style={
                         "height": "300px",
                         "overflowY": "auto",
@@ -60,16 +60,16 @@ def render_chat_interface():
 
                 # Spinner de carga
                 dcc.Loading(
-                    id="orbi-loading",
+                    id="orbit-loading",
                     type="dot",
-                    children=html.Div(id="orbi-loading-output")
+                    children=html.Div(id="orbit-loading-output")
                 ),
 
                 # Pie
                 html.Div(
                     children=[
                         dcc.Input(
-                            id="orbi-user-input",
+                            id="orbit-user-input",
                             type="text",
                             placeholder="Pregúntame sobre los datos...",
                             style={
@@ -82,7 +82,7 @@ def render_chat_interface():
                         ),
                         html.Button(
                             "->",
-                            id="orbi-send-btn",
+                            id="orbit-send-btn",
                             style={
                                 "width": "20%",
                                 "padding": "8px",
@@ -105,5 +105,5 @@ def render_chat_interface():
         ),
         
         # Almacén de estado para mantener la conversación
-        dcc.Store(id="orbi-conversation-store", data=[])
+        dcc.Store(id="orbit-conversation-store", data=[])
     ])

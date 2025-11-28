@@ -13,13 +13,13 @@ from callbacks import (
 import os
 
 orbi_agent = None
-if os.environ.get("LOAD_ORBI", "True") == "True": # Flag opcional para desarrollo
+if os.environ.get("LOAD_ORBIT", "True") == "True": # Flag opcional para desarrollo
     try:
-        print("--- Iniciando carga del Modelo ORBI ---")
+        print("--- Iniciando carga del Modelo ORBIT ---")
         orbi_agent = OrbiAssistant() 
-        print("--- ORBI Listo ---")
+        print("--- ORBIT Listo ---")
     except Exception as e:
-        print(f"Advertencia: No se pudo cargar ORBI. El chat no funcionará. Error: {e}")
+        print(f"Advertencia: No se pudo cargar ORBIT. El chat no funcionará. Error: {e}")
 
 def create_app() -> Dash:
     """Inicializa la app Dash, layout y callbacks."""

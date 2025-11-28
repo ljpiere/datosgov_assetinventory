@@ -919,12 +919,12 @@ Selecciona otra fila en la tabla para actualizar el reporte; se listan hasta {le
 """.strip()
 
 
-# CLASE ORBI
+# CLASE ORBIT
 
 class OrbiAssistant:
     def __init__(self, model_id="google/gemma-2-2b-it",alternative="bartowski/gemma-2-2b-it-GGUF"):
         # carga el modelo gemma
-        print("\nInicializando ORBI...")
+        print("\nInicializando ORBIT...")
 
         # Cargar Base de Conocimiento (RAG)
         print("Indexando Guía de Calidad...")
@@ -1011,7 +1011,7 @@ class OrbiAssistant:
 PREGUNTA DEL USUARIO:
 {user_query}
 
-Responde de forma clara y útil como Orbi.<end_of_turn>
+Responde de forma clara y útil como Orbit.<end_of_turn>
 <start_of_turn>model
 """     
         device = self.model.device 
@@ -1032,7 +1032,7 @@ Responde de forma clara y útil como Orbi.<end_of_turn>
         if any(k in msg_lower for k in quality_keywords):
             context = self._retrieve_guide_info(message)
             if context:
-                sys_prompt = f"Eres Orbi, experto en calidad de datos del gobierno colombiano. Usa este contexto de la guía oficial:\n\n{context}"
+                sys_prompt = f"Eres Orbit, experto en calidad de datos del gobierno colombiano. Usa este contexto de la guía oficial:\n\n{context}"
                 return self._generate_response(sys_prompt, message)
             else:
                 return "No encontré ese tema específico en la Guía de Calidad. ¿Podrías darme el código de error (ej: ERR005) o el nombre del criterio?"
@@ -1047,8 +1047,8 @@ Responde de forma clara y útil como Orbi.<end_of_turn>
             for i, row in results.iterrows():
                 data_context += f"- Nombre: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Descripción: {str(row.get('Descripción', ''))[:100]}...\n  UID: {row.get('UID', 'N/A')}\n\n"
 
-            sys_prompt = f"Eres Orbi, un asistente de datos abiertos. El usuario busca información. Usa estos datasets encontrados para responder:\n\n{data_context}"
+            sys_prompt = f"Eres Orbit, un asistente de datos abiertos. El usuario busca información. Usa estos datasets encontrados para responder:\n\n{data_context}"
             return self._generate_response(sys_prompt, message)
 
         # 3. Conversación general
-        return self._generate_response("Eres Orbi, un asistente amable de datos abiertos de Colombia. Si no sabes la respuesta, sugiere buscar datos o consultar la guía de calidad.", message)
+        return self._generate_response("Eres Orbit, un asistente amable de datos abiertos de Colombia. Si no sabes la respuesta, sugiere buscar datos o consultar la guía de calidad.", message)

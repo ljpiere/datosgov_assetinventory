@@ -1,109 +1,87 @@
 from dash import html, dcc
 
 def render_chat_interface():
+    initial_history = [
+        {
+            "role": "orbit",
+            "content": "¡Hola! Soy **Manaba**, tu oso de anteojos explorador de datos 🐻.\n\nPuedo ayudarte a encontrar datasets, revisar su calidad o explicarte conceptos. \n\n¿Qué quieres rastrear hoy?"
+        }
+    ]
+
     return html.Div([
-        # Botón flotante ¿
+        html.Div(
+            id="manaba-bubble-container",
+            className="manaba-floating-bubble", # Clase CSS para el diseño
+            style={"display": "none"}, # Oculto por defecto, el callback lo muestra
+            children=[
+                # Texto editable
+                html.Span("¿Tienes dudas? Estoy aquí para ayudarte", id="manaba-bubble-text"),
+                # Triangulito (Cola de la burbuja) creado con CSS
+                html.Div(className="bubble-tail")
+            ]
+        ),
+
+        dcc.Interval(
+            id="bubble-timer",
+            interval=15000, # 15 segundos (en milisegundos)
+            n_intervals=0,
+            disabled=True # Apagado por defecto
+        ),
+
         html.Button(
-            "Orbit",
+            "", 
             id="orbit-toggle-btn",
             style={
                 "position": "fixed",
-                "bottom": "20px",
-                "right": "20px",
+                "bottom": "30px",
+                "right": "30px",
                 "zIndex": "1000",
-                "borderRadius": "50px",
-                "width": "60px",
-                "height": "60px",
-                "backgroundColor": "#003366", 
-                "color": "white",
-                "border": "none",
-                "boxShadow": "0 4px 8px rgba(0,0,0,0.2)",
-                "cursor": "pointer",
-                "fontWeight": "bold",
-                "fontSize": "1.2rem"
             }
         ),
 
-        # Ventana del Chat 
         html.Div(
             id="orbit-chat-window",
             style={"display": "none"}, 
             children=[
-                # Encabezado
                 html.Div(
                     children=[
-                        html.Span("Asistente Orbit", style={"fontWeight": "bold"}),
-                        html.Span("✕", id="orbit-close-btn", style={"cursor": "pointer", "float": "right", "fontWeight": "bold"})
+                        html.Span("Manaba 🐻", style={"fontSize": "1.1rem"}),
+                        html.Span("✕", id="orbit-close-btn", style={"cursor": "pointer", "fontSize": "1.2rem", "fontWeight": "bold"})
                     ],
-                    style={
-                        "backgroundColor": "#003366",
-                        "color": "white",
-                        "padding": "10px 15px",
-                        "borderTopLeftRadius": "10px",
-                        "borderTopRightRadius": "10px",
-                    }
+                    className="chat-header"
                 ),
                 
-                # Cuerpo 
                 html.Div(
                     id="orbit-chat-history",
                     style={
-                        "height": "300px",
+                        "height": "350px",
                         "overflowY": "auto",
-                        "padding": "15px",
-                        "backgroundColor": "#f9f9f9",
                         "display": "flex",
                         "flexDirection": "column",
-                        "gap": "10px"
                     }
                 ),
 
-                # Spinner de carga
-                dcc.Loading(
-                    id="orbit-loading",
-                    type="dot",
-                    children=html.Div(id="orbit-loading-output")
-                ),
+                dcc.Loading(id="orbit-loading", type="dot", color="#3366CC", children=html.Div(id="orbit-loading-output")),
 
-                # Pie
                 html.Div(
                     children=[
                         dcc.Input(
                             id="orbit-user-input",
                             type="text",
-                            placeholder="Pregúntame sobre los datos...",
-                            style={
-                                "width": "75%",
-                                "padding": "8px",
-                                "borderRadius": "5px",
-                                "border": "1px solid #ccc",
-                                "marginRight": "5px"
-                            }
+                            placeholder="Escribe tu mensaje...",
+                            autoComplete="off",
+                            className="chat-input-pill"
                         ),
                         html.Button(
-                            "->",
+                            "🐾", 
                             id="orbit-send-btn",
-                            style={
-                                "width": "20%",
-                                "padding": "8px",
-                                "backgroundColor": "#003366",
-                                "color": "white",
-                                "border": "none",
-                                "borderRadius": "5px",
-                                "cursor": "pointer"
-                            }
+                            className="chat-send-btn"
                         )
                     ],
-                    style={
-                        "padding": "10px",
-                        "borderTop": "1px solid #eee",
-                        "display": "flex",
-                        "justifyContent": "space-between"
-                    }
+                    className="chat-input-area"
                 )
             ]
         ),
         
-        # Almacén de estado para mantener la conversación
-        dcc.Store(id="orbit-conversation-store", data=[])
+        dcc.Store(id="orbit-conversation-store", data=initial_history)
     ])

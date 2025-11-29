@@ -15,11 +15,11 @@ import os
 orbi_agent = None
 if os.environ.get("LOAD_ORBIT", "True") == "True": # Flag opcional para desarrollo
     try:
-        print("--- Iniciando carga del Modelo ORBIT ---")
+        print("--- Despertando a MANABA ---")
         orbi_agent = OrbiAssistant() 
-        print("--- ORBIT Listo ---")
+        print("--- MANABA ha despertado ---")
     except Exception as e:
-        print(f"Advertencia: No se pudo cargar ORBIT. El chat no funcionará. Error: {e}")
+        print(f"Advertencia: MANABA Esta ocupado. El chat no funcionará. Error: {e}")
 
 def create_app() -> Dash:
     """Inicializa la app Dash, layout y callbacks."""

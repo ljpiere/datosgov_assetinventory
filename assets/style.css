@@ -1,5 +1,5 @@
-/* --- 1. IMPORTACIÓN DE FUENTES --- */
-/* Opción A: Si tienes los archivos locales en assets/fonts/ */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+
 @font-face {
     font-family: 'Berlin Sans FB';
     src: local('Berlin Sans FB'), url('/assets/fonts/BerlinSansFB.ttf') format('truetype');
@@ -10,21 +10,37 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
 }
 
-/* Opción B: Fallback a fuentes del sistema si no están los archivos */
+
+/* ESTÉTICA MANABA*/
+:root {
+    --bg-deep: #01121E;        /* Fondo Noche Profunda */
+    --bg-mid: #022B3A;         /* Azul Medianoche */
+    --accent-turq: #1EC9BD;    /* Turquesa Manaba Vibrante */
+    --accent-green: #A8E6CF;   /* Verde Menta */
+    --gov-blue: #3366CC;       /* Azul Institucional (Solo Navbar) */
+    --glass-bg: rgba(255, 255, 255, 0.08); /* Vidrio translúcido */
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --text-main: #000000;
+}
+
 body {
     margin: 0;
     padding: 0;
     font-family: 'Inter', sans-serif;
+    background-color: var(--bg-deep);
+    color: var(--text-main);
     overflow-x: hidden;
 }
 
-/* --- 2. TIPOGRAFÍA MANABA --- */
+/* Títulos */
 h1, h2, h3, h4, .metric-title, .agent-title {
     font-family: 'Berlin Sans FB', 'Trebuchet MS', sans-serif;
-    color: #021B2B; /* Azul Noche Profunda */
+    color: var(--accent-turq);
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 20px rgba(30, 201, 189, 0.3); /* Brillo sutil */
 }
 
-/* --- 3. ANIMACIONES (ESTRELLAS) --- */
+/* --- ANIMACIONES --- */
 @keyframes twinkle {
     0% { opacity: 0.3; transform: scale(0.8); }
     100% { opacity: 1; transform: scale(1.1); }
@@ -45,9 +61,8 @@ h1, h2, h3, h4, .metric-title, .agent-title {
     }
 }
 
-/* --- 4. COMPONENTES DE UI PERSONALIZADOS --- */
 
-/* Navbar Manaba (Transparente y flotante) */
+/* --- TARJETAS ACUARELAS--- */
 .manaba-nav {
     background: rgba(2, 27, 43, 0.95); /* Azul oscuro semitransparente */
     backdrop-filter: blur(10px);
@@ -66,7 +81,43 @@ h1, h2, h3, h4, .metric-title, .agent-title {
     color: #021B2B !important; /* Texto oscuro al hover */
 }
 
-/* Tarjetas de Métricas (Efecto Glass) */
+.manaba-floating-bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -12px; /* Posición abajo */
+    right: 30px;   /* Alineado hacia la derecha donde está el oso */
+    
+    /* Crear triangulo con bordes */
+    border-width: 12px 12px 0;
+    border-style: solid;
+    border-color: #3366CC transparent transparent transparent;
+    display: block;
+    width: 0;
+}
+
+/* Parche blanco para que la colita parezca hueca (borde solo afuera) */
+.manaba-floating-bubble::before {
+    content: '';
+    position: absolute;
+    bottom: -9px;
+    right: 33px;
+    border-width: 9px 9px 0;
+    border-style: solid;
+    border-color: #FFFFFF transparent transparent transparent;
+    display: block;
+    width: 0;
+    z-index: 1;
+}
+
+/* Animación de aparición */
+@keyframes popIn {
+    0% { transform: scale(0); opacity: 0; }
+    80% { transform: scale(1.1); opacity: 1; }
+    100% { transform: scale(1); }
+}
+
+
+
 .metric-card {
     background: rgba(255, 255, 255, 0.9);
     border: 1px solid #E0F7FA;
@@ -87,15 +138,216 @@ h1, h2, h3, h4, .metric-title, .agent-title {
     font-size: 1.8rem;
 }
 
+/*.metric-value {
+    color: #FFFFFF;
+    font-weight: 800;
+    font-size: 2.5rem;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+*/
+
 .metric-detail {
     color: #546E7A; /* Gris azulado */
 }
+
+
+/*.metric-detail {
+    color: #B0BEC5;
+    font-size: 0.9rem;
+}
+*/
+
 
 /* --- 5. ESTILOS GLOBALES --- */
 .subtitle {
     line-height: 1.6;
     letter-spacing: 0.5px;
 }
+
+
+.glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+    margin-bottom: 2rem;
+    transition: transform 0.3s ease;
+}
+
+.glass-card:hover {
+    border-color: rgba(30, 201, 189, 0.4);
+}
+
+
+
+/* --- 3. NAVBAR INSTITUCIONAL (Requerimiento Específico) --- */
+.gov-navbar {
+    background-color: var(--gov-blue) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    padding: 0.8rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.gov-brand {
+    font-family: 'Inter', sans-serif;
+    font-weight: 700;
+    font-size: 1.3rem;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.gov-nav-link {
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-weight: 500;
+    text-decoration: none;
+    padding: 0.5rem 1.2rem;
+    border-radius: 30px;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+}
+
+.gov-nav-link:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white !important;
+    transform: translateY(-2px);
+}
+
+.gov-nav-link.active {
+    background-color: white;
+    color: var(--gov-blue) !important;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+/* --- 4. CHAT Manaba --- */
+.manaba-floating-bubble {
+    position: fixed;
+    bottom: 110px; /* Justo encima del botón del oso */
+    right: 40px;
+    background-color: #FFFFFF;
+    border: 2px solid #3366CC; /* Azul Institucional */
+    border-radius: 15px;
+    padding: 15px 20px;
+    width: 200px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+    z-index: 999;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 1rem;
+    color: #000;
+    line-height: 1.3;
+    animation: popIn 0.5s ease-out;
+    z-index: 999;
+    pointer-events: none;
+}
+
+
+#orbit-toggle-btn {
+    background-color: transparent !important;
+    background-image: url('images/manaba_bot.png');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: none !important;
+    box-shadow: none !important;
+    width: 85px !important;
+    height: 85px !important;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+}
+#orbit-toggle-btn:hover { 
+    background-image: url('images/manaba_bot_hober.png'); 
+    transform: scale(1.1) rotate(5deg); 
+}
+
+/* Ventana blanca limpia sobre fondo oscuro */
+#orbit-chat-window {
+    background-color: #FFFFFF !important;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+    border: 4px solid var(--gov-blue); /* Borde azul institucional */
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+}
+
+.chat-header {
+    background-color: #FFFFFF;
+    color: var(--gov-blue) !important;
+    font-weight: 800;
+    padding: 18px 24px;
+    border-bottom: 1px solid #F0F0F0;
+    display: flex; justify-content: space-between; align-items: center;
+}
+
+#orbit-chat-history {
+    background-color: #F8FAFC !important;
+    padding: 20px;
+}
+
+/* Estructura Mensaje */
+.msg-container { display: flex; margin-bottom: 20px; width: 100%; align-items: flex-end; }
+.msg-container.user-side { justify-content: flex-end; }
+
+.chat-avatar-img {
+    width: 42px; height: 42px; object-fit: contain; margin-right: 12px;
+}
+
+/* Burbujas */
+.chat-bubble-orbit {
+    background-color: #FFFFFF;
+    color: #333;
+    border: 1px solid #E2E8F0;
+    border-radius: 18px 18px 18px 2px;
+    padding: 14px 18px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    max-width: 75%; font-size: 0.95rem; line-height: 1.5;
+}
+
+.chat-bubble-user {
+    background-color: var(--gov-blue);
+    color: white;
+    border-radius: 18px 18px 2px 18px;
+    padding: 14px 18px;
+    max-width: 75%; font-size: 0.95rem;
+    box-shadow: 0 4px 10px rgba(51, 102, 204, 0.3);
+}
+
+/* Input Area */
+.chat-input-area {
+    background-color: #FFFFFF; padding: 15px; border-top: 1px solid #EEE; display: flex; gap: 10px;
+}
+.chat-input-pill {
+    background-color: #F1F5F9 !important; border: 1px solid transparent !important;
+    border-radius: 50px; padding: 12px 20px; width: 100%; color: #333; outline: none;
+}
+.chat-input-pill:focus { border-color: var(--gov-blue) !important; background-color: #FFF !important; }
+
+.chat-send-btn {
+    background-color: var(--gov-blue) !important; color: white; border-radius: 50%;
+    width: 45px; height: 45px; border: none; cursor: pointer; display: flex; justify-content: center; align-items: center;
+}
+
+/* --- 5. CORRECCIONES DASH --- */
+/* Asegurar que las gráficas sean legibles en modo oscuro pero dentro de cajas claras o transparentes */
+.js-plotly-plot .plotly .main-svg {
+    background-color: transparent !important;
+}
+.js-plotly-plot .plotly .modebar {
+    background-color: transparent !important;
+}
+/* Textos de gráficas en blanco por defecto */
+.gtitle, .xtitle, .ytitle { fill: #FFFFFF !important; }
+.dash-table-container { color: #333; } /* Tablas internas legibles */
 
 /* Scrollbar personalizada (Opcional, estilo moderno) */
 ::-webkit-scrollbar {

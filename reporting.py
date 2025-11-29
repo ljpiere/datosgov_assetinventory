@@ -26,10 +26,12 @@ import csv
 from datetime import datetime
 import plotly.graph_objects as go
 from io import BytesIO
+from pathlib import Path
 
 try:
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
+    from reportlab.lib.utils import ImageReader
 
     REPORTLAB_AVAILABLE = True
 except Exception:  # pragma: no cover - dependencia opcional
@@ -467,7 +469,7 @@ def build_quality_summary(record: Dict[str, Any]) -> List[Dict[str, str]]:
     if days_since_update is not None:
         days_since_update_num = int(_to_numeric(days_since_update))
     views = _to_numeric(_smart_get(record, ["visits", "Vistas","La cantidad de veces que se ha visto este recurso"],""))
-    downloads = _to_numeric(_smart_get(record, ["downloads", "La cantidad de veces que se descargó el recurso","Descargas"],""))
+    downloads = _to_numeric(_smart_get(record, ["Descargas","downloads", "La cantidad de veces que se descargó el recurso"],""))
     freq = record.get("update_frequency_norm") or record.get(
         _smart_get(record, ["informacindedatos_frecuenciadeactualizacin", "Información de Datos: Frecuencia de Actualización","Frecuencia de Actualización de los Datos"],"sin registro")
     )
@@ -477,7 +479,7 @@ def build_quality_summary(record: Dict[str, Any]) -> List[Dict[str, str]]:
         coherence_flag = coherence_flag_raw.lower() == "true"
     else:
         coherence_flag = bool(coherence_flag_raw)
-    access_level = _smart_get(record, ["commoncore_publicaccesslevel", "Common Core: Public Access Level","Acceso al Recurso de la Entidad Federando"],"desconocido")
+    access_level = record.get("Common Core: Public Access Level") or "desconocido"
 
     return [
         {
@@ -631,13 +633,58 @@ def build_pdf_document(
     if not REPORTLAB_AVAILABLE:
         raise ImportError("reportlab no está instalado.")
 
+    base_dir = Path(__file__).resolve().parent
+    logo_path = base_dir / "docs" / "logo.png"
+    footer_path = base_dir / "docs" / "endapage.png"
+    logo_reader = ImageReader(str(logo_path)) if logo_path.exists() else None
+    footer_reader = ImageReader(str(footer_path)) if footer_path.exists() else None
+
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
     margin = 50
     y = height - margin
 
-    title = f"Reporte de dataset · UID {_smart_get(record, ['UID', 'uid', 'La identificación única del recurso'], '')}"
+    def _draw_branding():
+        """Coloca logo arriba derecha y franja de pie de página; se llama en cada página."""
+        # Logo
+        if logo_reader is not None:
+            try:
+                img_w, img_h = logo_reader.getSize()
+                target_w = 35.0  # m�s peque�o para evitar pixelado
+                target_h = target_w * (img_h / img_w)
+                c.drawImage(
+                    logo_reader,
+                    x=width - margin - target_w,
+                    y=height - margin - target_h + 10,  # levemente separado del borde
+                    width=target_w,
+                    height=target_h,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+            except Exception:
+                pass
+        # Pie de página
+        if footer_reader is not None:
+            try:
+                img_w, img_h = footer_reader.getSize()
+                target_w = width - (0.6 * margin)  # aún m�s ancho que el contenido
+                target_h = target_w * (img_h / img_w)
+                c.drawImage(
+                    footer_reader,
+                    x=margin * 0.3,
+                    y=max(0, 2 - target_h * 0.02),  # casi al borde inferior
+                    width=target_w,
+                    height=target_h,
+                    mask="auto",
+                    preserveAspectRatio=True,
+                )
+            except Exception:
+                pass
+
+    _draw_branding()
+
+    title = f"Reporte de dataset · UID {record.get('UID', '')}"
     c.setFont("Helvetica-Bold", 14)
     c.drawString(margin, y, title)
     y -= 18
@@ -650,7 +697,7 @@ def build_pdf_document(
 
     y -= 6
     c.setFont("Helvetica", 10)
-    description = _smart_get(record, ["description", "Descripción","La descripción del recurso"], "")
+    description = record.get("Descripción") or "Sin descripción disponible."
     for line in textwrap.wrap(description, 95):
         c.drawString(margin, y, line)
         y -= 12
@@ -674,6 +721,7 @@ def build_pdf_document(
             c.showPage()
             y = height - margin
             c.setFont("Helvetica", 10)
+            _draw_branding()
         name = metric.get("Métrica", "Métrica")
         score = metric.get("Puntaje", "N/D")
         definition = metric.get("Definición", "")
@@ -699,6 +747,7 @@ def build_pdf_document(
             c.showPage()
             y = height - margin
             c.setFont("Helvetica", 10)
+            _draw_branding()
 
         wrapped = textwrap.wrap(f"{pair['Campo']}: {pair['Valor']}", 100)
         for line in wrapped:
@@ -771,9 +820,9 @@ def build_cut_csv(df) -> str:
         metric_scores = build_dataset_metrics(record)
         metric_map = {m["Métrica"]: _extract_score(m.get("Puntaje")) for m in metric_scores}
 
-        last_update = _smart_get(record, ["Fecha de última actualización de datos (UTC)", "last_data_updated_date", "Última actualización de datos tabulares","commoncore_lastupdate", "Common Core: Last Update","Fecha de Actualización de la Entidad Federando"], "")
-
-
+        last_update = record.get("Fecha de última actualización de datos (UTC)") or record.get(
+            "Common Core: Last Update"
+        )
         if isinstance(last_update, str):
             last_update_str = last_update
         else:

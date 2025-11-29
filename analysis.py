@@ -109,6 +109,8 @@ Dominios: Político-Legal, Organizacional, Semántico (Lenguaje común), Técnic
 """
 
 
+URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
+
 METADATA_FIELDS = [
     "name",
     "Descripción",

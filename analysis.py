@@ -959,22 +959,6 @@ class OrbiAssistant:
             print("Modelo cargado exitosamente en GPU.")
             
         except Exception as e:
-            print(f"Advertencia: Falló la carga en GPU/4-bit. Causa: {e}")
-            try:
-                self.model = CAutoModel.from_pretrained(
-                    alternative,
-                    model_file="gemma-2-2b-it-Q4_K_M.gguf", 
-                    model_type="gemma",
-                    gpu_layers=50, # Pasa todo a la GPU
-                    context_length=2048
-                )
-                
-                # 2. Cargamos el Tokenizer de HuggingFace por separado
-                # (ctransformers tiene el suyo, pero para compatibilidad con tu código usamos este)
-                self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-                
-                print("Modelo cargado exitosamente en GPU (Modo GGUF).")
-            except Exception as e:
                 print(f"Advertencia: Falló la carga en GPU. Causa: {e}")
                 print("Cambiando a modo CPU...")
                 try:

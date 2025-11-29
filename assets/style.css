@@ -1,0 +1,113 @@
+/* --- 1. IMPORTACIÓN DE FUENTES --- */
+/* Opción A: Si tienes los archivos locales en assets/fonts/ */
+@font-face {
+    font-family: 'Berlin Sans FB';
+    src: local('Berlin Sans FB'), url('/assets/fonts/BerlinSansFB.ttf') format('truetype');
+}
+
+@font-face {
+    font-family: 'Inter';
+    src: url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+}
+
+/* Opción B: Fallback a fuentes del sistema si no están los archivos */
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', sans-serif;
+    overflow-x: hidden;
+}
+
+/* --- 2. TIPOGRAFÍA MANABA --- */
+h1, h2, h3, h4, .metric-title, .agent-title {
+    font-family: 'Berlin Sans FB', 'Trebuchet MS', sans-serif;
+    color: #021B2B; /* Azul Noche Profunda */
+}
+
+/* --- 3. ANIMACIONES (ESTRELLAS) --- */
+@keyframes twinkle {
+    0% { opacity: 0.3; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes shooting-star {
+    0% {
+        transform: translateX(0) translateY(0) rotate(-45deg) scale(1);
+        opacity: 1;
+    }
+    20% {
+        opacity: 0;
+        transform: translateX(-200px) translateY(200px) rotate(-45deg) scale(0.1);
+    }
+    100% {
+        opacity: 0;
+        transform: translateX(-200px) translateY(200px) rotate(-45deg) scale(0.1);
+    }
+}
+
+/* --- 4. COMPONENTES DE UI PERSONALIZADOS --- */
+
+/* Navbar Manaba (Transparente y flotante) */
+.manaba-nav {
+    background: rgba(2, 27, 43, 0.95); /* Azul oscuro semitransparente */
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid #0B3D52;
+    color: white;
+}
+
+.manaba-nav a {
+    color: #AEECE8 !important; /* Texto turquesa claro */
+    transition: all 0.3s ease;
+}
+
+.manaba-nav a:hover {
+    color: #FFFFFF !important;
+    background-color: #00E5CC !important; /* Turquesa vibrante al hover */
+    color: #021B2B !important; /* Texto oscuro al hover */
+}
+
+/* Tarjetas de Métricas (Efecto Glass) */
+.metric-card {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #E0F7FA;
+    border-radius: 16px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 229, 204, 0.1); /* Sombra turquesa suave */
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 30px rgba(0, 229, 204, 0.25);
+}
+
+.metric-value {
+    color: #00E5CC; /* Turquesa Manaba */
+    font-weight: bold;
+    font-size: 1.8rem;
+}
+
+.metric-detail {
+    color: #546E7A; /* Gris azulado */
+}
+
+/* --- 5. ESTILOS GLOBALES --- */
+.subtitle {
+    line-height: 1.6;
+    letter-spacing: 0.5px;
+}
+
+/* Scrollbar personalizada (Opcional, estilo moderno) */
+::-webkit-scrollbar {
+    width: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #021B2B; 
+}
+::-webkit-scrollbar-thumb {
+    background: #0B3D52; 
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #00E5CC; 
+}

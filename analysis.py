@@ -995,7 +995,16 @@ class OrbiAssistant:
                 context.append(self.guide_chunks[idx])
         return "\n".join(context) if context else None
 
-    def _generate_response(self, system_prompt, user_query):
+    def _generate_response(self, system_prompt, user_query, history=[]):
+
+        # historial de conversacion
+        history_str = ""
+        if history:
+            # tomamos los ultimos 12 mensajes para no colapsar memoria
+            recent_history = history[-12:]
+            for msg in recent_history:
+                role = "model" if msg['role'] == "orbit" else "user"
+                history_str += f"<start_of_turn>{role}\n{msg['content']}<end_of_turn>\n"
         """Genera respuesta con Gemma."""
         prompt = f"""<start_of_turn>user
 {system_prompt}
@@ -1009,7 +1018,7 @@ IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas 
         device = self.model.device 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
         with torch.no_grad():
-            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=0.5)
+            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=0.7)
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1]
 
     def chat(self, message, history):
@@ -1032,7 +1041,7 @@ IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas 
                 "Responde con un sonido de oso feliz (como *Grrr* suave) o una frase corta y amable. "
                 "Invítalo directamente a rastrear un dato."
             )
-            return self._generate_response(sys_prompt, message)
+            return self._generate_response(sys_prompt, message, history)
 
         # ¿Es sobre Calidad o errores?
         quality_keywords = ["error", "err", "calidad", "criterio", "norma", "guía", "sello", "iso", "interoperabilidad"]
@@ -1040,7 +1049,7 @@ IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas 
             context = self._retrieve_guide_info(message)
             if context:
                 sys_prompt = f"Eres Manaba, un oso de anteojos experto en calidad de datos del gobierno colombiano. Eres amable pero riguroso con la calidad. Usa este contexto:\n\n{context}"
-                return self._generate_response(sys_prompt, message)
+                return self._generate_response(sys_prompt, message, history)
             else:
                 return "Grrr... he buscado en mi guía pero no encuentro ese tema específico sobre calidad. ¿Tienes el código del error (ej: ERR005)?"
 
@@ -1055,7 +1064,7 @@ IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas 
                 data_context += f"- Nombre: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Descripción: {str(row.get('Descripción', ''))[:100]}...\n  UID: {row.get('UID', 'N/A')}\n\n"
 
             sys_prompt = f"Eres Manaba, el oso guardián de los datos abiertos. Ayuda al usuario a encontrar lo que busca usando estos hallazgos:\n\n{data_context}"
-            return self._generate_response(sys_prompt, message)
+            return self._generate_response(sys_prompt, message, history)
 
         # Conversación general
-        return self._generate_response("Eres Manaba, un oso de anteojos amigable que vive en el ecosistema de datos de Colombia. Te gusta ayudar a la gente a encontrar y cuidar los datos.", message)
+        return self._generate_response("Eres Manaba, un oso de anteojos amigable que vive en el ecosistema de datos de Colombia. Te gusta ayudar a la gente a encontrar y cuidar los datos.", message, history)

@@ -228,9 +228,9 @@ def register_cut_callbacks(app, df):
 
 def register_chat_callbacks(app, orbi_agent):
     
-    # Callback 1: Abrir/Cerrar Ventana
     @app.callback(
-        Output("orbit-chat-window", "style"),
+        [Output("orbit-chat-window", "style"),
+        Output("orbit-conversation-store", "data", allow_duplicate=True)],
         [Input("orbit-toggle-btn", "n_clicks"),
          Input("orbit-close-btn", "n_clicks")],
         State("orbit-chat-window", "style"),
@@ -241,7 +241,6 @@ def register_chat_callbacks(app, orbi_agent):
         if not ctx.triggered: return no_update
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-        # Estilo para mostrar la ventana (fija abajo derecha)
         show_style = {
             "position": "fixed",
             "bottom": "110px",
@@ -251,16 +250,20 @@ def register_chat_callbacks(app, orbi_agent):
             "display": "block"
         }
 
+        welcome_msg = [{
+            "role": "orbit",
+            "content": "¡Hola! Soy **Manaba**. 🐻\n\nExplorador de datos abiertos. ¿En qué te puedo ayudar hoy?"
+        }]
+
         if button_id == "orbit-toggle-btn":
             if current_style and current_style.get("display") == "block":
                 return {"display": "none"}
             return show_style
         elif button_id == "orbit-close-btn":
-            return {"display": "none"}
+            return {"display": "none"}, welcome_msg
             
         return no_update
 
-    # Callback 2: Conversación
     @app.callback(
         [Output("orbit-chat-history", "children"),
          Output("orbit-user-input", "value"),
@@ -276,7 +279,6 @@ def register_chat_callbacks(app, orbi_agent):
         ctx = callback_context
         triggered_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else "init"
 
-        # Carga inicial (mostrar mensaje de bienvenida del store)
         if triggered_id == "orbit-conversation-store" or triggered_id == "init":
             history = history or []
             return _render_messages(history), no_update, no_update, ""
@@ -284,11 +286,9 @@ def register_chat_callbacks(app, orbi_agent):
         if not user_text:
             return no_update, no_update, no_update, no_update
 
-        # Nuevo mensaje usuario
         history = history or []
         history.append({"role": "user", "content": user_text})
         
-        # Generar respuesta
         response_text = "Lo siento, Manaba está durmiendo."
         if orbi_agent:
             try:
@@ -300,50 +300,41 @@ def register_chat_callbacks(app, orbi_agent):
 
         return _render_messages(history), "", history, ""
 
-    # Callback 3: Control de Burbuja (15 seg)
     @app.callback(
         [Output("manaba-bubble-container", "style"),
          Output("bubble-timer", "disabled"),
          Output("bubble-timer", "n_intervals")],
-        [Input("url", "pathname"),           # Al navegar
-         Input("bubble-timer", "n_intervals"), # Al pasar tiempo
-         Input("orbit-toggle-btn", "n_clicks")], # Al abrir chat
+        [Input("bubble-timer", "n_intervals"), 
+         Input("orbit-toggle-btn", "n_clicks")],
         State("manaba-bubble-container", "style")
     )
     def control_bubble(pathname, n_intervals, n_clicks_toggle, current_style):
         ctx = callback_context
         trigger_id = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else "init"
 
-        # Si abre el chat -> Ocultar burbuja
         if trigger_id == "orbit-toggle-btn":
             return {"display": "none"}, True, 0
 
-        # Si carga página -> Mostrar burbuja, iniciar timer
         if trigger_id == "url" or trigger_id == "init":
             return {"display": "block"}, False, 0
 
-        # Si timer termina -> Ocultar burbuja
         if trigger_id == "bubble-timer" and n_intervals >= 1:
             return {"display": "none"}, True, 0
 
         return no_update, no_update, no_update
 
-    # Renderizador de mensajes con Avatar
     def _render_messages(history):
         messages_html = []
         for msg in history:
             is_user = msg["role"] == "user"
             content_list = []
             
-            # Avatar Manaba a la izquierda
             if not is_user:
                 content_list.append(html.Img(src="assets/images/manaba_bot.png", className="chat-avatar-img"))
             
-            # Burbuja
             bubble_class = "chat-bubble-user" if is_user else "chat-bubble-orbit"
             content_list.append(html.Div(dcc.Markdown(msg["content"]), className=bubble_class))
             
-            # Contenedor flex
             container_class = "msg-container user-side" if is_user else "msg-container orbit-side"
             messages_html.append(html.Div(content_list, className=container_class))
             

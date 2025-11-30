@@ -1018,7 +1018,7 @@ IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas 
         device = self.model.device 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
         with torch.no_grad():
-            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=0.7)
+            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=0.3)
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1]
 
     def chat(self, message, history):

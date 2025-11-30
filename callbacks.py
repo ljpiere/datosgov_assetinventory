@@ -259,11 +259,11 @@ def register_chat_callbacks(app, orbi_agent):
         if button_id == "orbit-toggle-btn":
             if current_style and current_style.get("display") == "block":
                 return {"display": "none"}
-            return show_style
+            return show_style, no_update 
         elif button_id == "orbit-close-btn":
             return {"display": "none"}, welcome_msg
             
-        return no_update
+        return no_update, no_update
 
     @app.callback(
         [Output("orbit-chat-history", "children"),
@@ -305,7 +305,8 @@ def register_chat_callbacks(app, orbi_agent):
         [Output("manaba-bubble-container", "style"),
          Output("bubble-timer", "disabled"),
          Output("bubble-timer", "n_intervals")],
-        [Input("bubble-timer", "n_intervals"), 
+        [Input("url", "pathname"),   
+         Input("bubble-timer", "n_intervals"), 
          Input("orbit-toggle-btn", "n_clicks")],
         State("manaba-bubble-container", "style")
     )

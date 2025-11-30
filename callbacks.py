@@ -237,7 +237,7 @@ def register_chat_callbacks(app, orbi_agent):
          State("orbit-conversation-store", "data")],
         prevent_initial_call=True
     )
-    def toggle_chat(n_open, n_close, current_style):
+    def toggle_chat(n_open, n_close, current_style, current_data):
         ctx = callback_context
         if not ctx.triggered: return no_update
         button_id = ctx.triggered[0]["prop_id"].split(".")[0]
@@ -257,9 +257,11 @@ def register_chat_callbacks(app, orbi_agent):
         }]
 
         if button_id == "orbit-toggle-btn":
-            if current_style and current_style.get("display") == "block":
-                return {"display": "none"}
-            return show_style, no_update 
+            if not current_style or current_style.get("display") == "none":
+                return show_style, no_update
+            else:
+                return {"display": "none"}, no_update
+                
         elif button_id == "orbit-close-btn":
             return {"display": "none"}, welcome_msg
             

@@ -230,10 +230,11 @@ def register_chat_callbacks(app, orbi_agent):
     
     @app.callback(
         [Output("orbit-chat-window", "style"),
-        Output("orbit-conversation-store", "data", allow_duplicate=True)],
+         Output("orbit-conversation-store", "data", allow_duplicate=True)],
         [Input("orbit-toggle-btn", "n_clicks"),
          Input("orbit-close-btn", "n_clicks")],
-        State("orbit-chat-window", "style"),
+        [State("orbit-chat-window", "style"),
+         State("orbit-conversation-store", "data")],
         prevent_initial_call=True
     )
     def toggle_chat(n_open, n_close, current_style):

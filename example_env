@@ -1,0 +1,3 @@
+# Transformar a .env y colocar el token real allí
+
+HF_TOKEN=token_para_huggingface --- IGNORE ---

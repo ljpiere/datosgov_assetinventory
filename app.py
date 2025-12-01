@@ -11,6 +11,16 @@ from callbacks import (
     register_chat_callbacks
 )
 import os
+from dotenv import load_dotenv
+from huggingface_hub import login
+
+load_dotenv()
+
+hf_token = os.environ.get("HF_TOKEN")
+if hf_token:
+    login(token=hf_token)
+else:
+    print("Advertencia: variable de entorno HF_TOKEN no encontrada; se omite el login a Hugging Face.")
 
 orbi_agent = None
 if os.environ.get("LOAD_ORBIT", "True") == "True": # Flag opcional para desarrollo

@@ -39,7 +39,21 @@ from typing import Dict, List, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-login()
+
+
+def ensure_hf_login() -> None:
+    """Intenta login no interactivo usando variable de entorno HF_TOKEN o HUGGINGFACEHUB_API_TOKEN."""
+    token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    if not token:
+        # Sin token no intentamos login para evitar prompt interactivo en contenedores.
+        return
+    try:
+        login(token=token, add_to_git_credential=False)
+    except Exception as exc:  # pragma: no cover - solo loguea
+        print(f"Aviso: no se pudo iniciar sesion en HuggingFace: {exc}")
+
+
+ensure_hf_login()
 
 try:
     from sklearn.cluster import KMeans

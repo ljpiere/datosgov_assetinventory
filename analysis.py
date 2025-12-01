@@ -1006,7 +1006,7 @@ class OrbiAssistant:
                 role = "model" if msg['role'] == "orbit" else "user"
                 history_str += f"<start_of_turn>{role}\n{msg['content']}<end_of_turn>\n"
         """Genera respuesta con Gemma."""
-        prompt = f"""<start_of_turn>user
+        prompt = f"""{history_str}<start_of_turn>user
 {system_prompt}
 
 ENTRADA DEL USUARIO:

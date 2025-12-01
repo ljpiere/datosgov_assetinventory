@@ -253,7 +253,7 @@ def register_chat_callbacks(app, orbi_agent):
 
         welcome_msg = [{
             "role": "orbit",
-            "content": ""
+            "content": "¡Hola! Soy **Manaba**. 🐻\n\nExplorador de datos abiertos. ¿En qué te puedo ayudar hoy?"
         }]
 
         if button_id == "orbit-toggle-btn":

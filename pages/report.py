@@ -3,13 +3,11 @@ from __future__ import annotations
 from dash import dcc, html
 from components.ui import STYLES, navbar, render_manaba_page
 
-# --- ESTILOS PERSONALIZADOS (SOLO PARA REPORTE) ---
-# Estos estilos replican el diseño de la Imagen 2 (Dark Glass + Turquesa)
 CUSTOM_STYLES = {
     "glass_container": {
-        "backgroundColor": "rgba(2, 43, 58, 0.6)", # Fondo oscuro translúcido
+        "backgroundColor": "rgba(2, 43, 58, 0.6)", 
         "backdropFilter": "blur(12px)",
-        "border": "1px solid rgba(30, 201, 189, 0.3)", # Borde turquesa suave
+        "border": "1px solid rgba(30, 201, 189, 0.3)", 
         "borderRadius": "20px",
         "padding": "2rem",
         "marginBottom": "2rem",
@@ -19,7 +17,7 @@ CUSTOM_STYLES = {
         "gap": "1.5rem"
     },
     "label": {
-        "color": "#1EC9BD", # Turquesa Manaba
+        "color": "#1EC9BD", 
         "fontWeight": "bold",
         "fontSize": "1.1rem",
         "marginBottom": "8px",
@@ -30,7 +28,7 @@ CUSTOM_STYLES = {
         "width": "100%",
         "padding": "14px 18px",
         "borderRadius": "12px",
-        "backgroundColor": "rgba(0, 0, 0, 0.2)", # Fondo input oscuro
+        "backgroundColor": "rgba(0, 0, 0, 0.2)",
         "border": "1px solid rgba(30, 201, 189, 0.5)",
         "color": "white",
         "outline": "none",
@@ -41,8 +39,8 @@ CUSTOM_STYLES = {
         "width": "100%",
         "padding": "12px",
         "borderRadius": "10px",
-        "backgroundColor": "#1EC9BD", # Botón vibrante
-        "color": "#01121E", # Texto oscuro
+        "backgroundColor": "#1EC9BD",
+        "color": "#01121E", 
         "border": "none",
         "fontWeight": "800",
         "fontSize": "1rem",
@@ -63,7 +61,7 @@ CUSTOM_STYLES = {
         "marginTop": "10px"
     },
     "result_card": {
-        "backgroundColor": "rgba(255, 255, 255, 0.95)", # Blanco para el reporte final (legibilidad)
+        "backgroundColor": "rgba(255, 255, 255, 0.95)",
         "borderRadius": "16px",
         "padding": "2rem",
         "color": "#333",
@@ -112,7 +110,7 @@ def layout(df):
                                 autoComplete="off"
                             ),
                         ],
-                        style={"flex": "2"} # Ocupa más espacio
+                        style={"flex": "2", "width":"95%"}
                     ),
                     
                     # Columna 2: Botones
@@ -137,14 +135,16 @@ def layout(df):
                 ],
                 style={
                     **CUSTOM_STYLES["glass_container"], 
-                    "flexDirection": "row", 
+                    "flex-direction": "column", 
                     "alignItems": "flex-start",
                     "gap": "20px",
-                    "flexWrap": "wrap" # Responsivo
+                    "flexWrap": "wrap",
+                    "flex-flow":"column wrap",
+                    "align-items":"stretch",
                 }
             ),
             
-            # --- RESULTADOS ---
+            # RESULTADOS
             html.Div(
                 id="report-content", 
                 children=_placeholder(), 
@@ -156,8 +156,6 @@ def layout(df):
         ]
     )
 
-    # Usamos render_manaba_page si está disponible en ui.py para mantener el fondo de estrellas
-    # Si no, usa un div simple.
     try:
         return render_manaba_page(content, active_path="/report")
     except NameError:

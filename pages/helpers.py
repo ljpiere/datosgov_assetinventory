@@ -13,6 +13,24 @@ from analysis import (
 )
 from components.ui import metric_card
 
+TABLE_HEADER_STYLE = {
+    'backgroundColor': 'rgba(30, 201, 189, 0.1)', 
+    'color': '#1EC9BD',
+    'fontWeight': 'bold',
+    'border': 'none',
+    'padding': '12px',
+    'textTransform': 'uppercase',
+    'fontSize': '0.85rem'
+}
+
+TABLE_CELL_STYLE = {
+    'backgroundColor': 'rgba(255, 255, 255, 0.05)', 
+    'color': 'white',
+    'borderBottom': '1px solid rgba(255, 255, 255, 0.1)',
+    'textAlign': 'left',
+    'padding': '10px',
+    'fontFamily': 'Inter, sans-serif'
+}
 
 def build_metric_cards(summary: dict) -> list:
     return [
@@ -36,6 +54,15 @@ def build_metric_cards(summary: dict) -> list:
 
 
 def build_figures(df):
+    dark_layout = dict(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white'),
+        title_font=dict(color='#1EC9BD'),
+        xaxis=dict(gridcolor='rgba(255,255,255,0.1)'),
+        yaxis=dict(gridcolor='rgba(255,255,255,0.1)'),
+    )
+
     entity_stats = completeness_by_entity(df)
     freq_stats = frequency_distribution(df)
     theme_stats = theme_coverage(df)
@@ -47,8 +74,9 @@ def build_figures(df):
         color="metadata_segment",
         opacity=0.8,
         title="Distribución de completitud de metadatos",
+        template="plotly_dark"
     )
-    hist_fig.update_layout(bargap=0.05, xaxis_tickformat=".0%")
+    hist_fig.update_layout(**dark_layout, bargap=0.05, xaxis_tickformat=".0%")
 
     entity_fig = px.bar(
         entity_stats.head(15),
@@ -58,8 +86,9 @@ def build_figures(df):
         color="assets",
         title="Entidades con mayor completitud",
         labels={"avg_completeness": "Completitud promedio", "entidad": "Entidad"},
+        template="plotly_dark"
     )
-    entity_fig.update_layout(xaxis_tickformat=".0%")
+    entity_fig.update_layout(**dark_layout, xaxis_tickformat=".0%")
 
     freshness_fig = px.bar(
         freq_stats,
@@ -68,14 +97,18 @@ def build_figures(df):
         color="freshness_bucket",
         title="Frecuencia declarada vs. frescura observada",
         labels={"update_frequency_norm": "Frecuencia declarada", "assets": "Activos"},
+        template="plotly_dark"
     )
+    freshness_fig.update_layout(**dark_layout)
 
     theme_fig = px.treemap(
         theme_stats,
         path=["sector", "theme_group"],
         values="assets",
         title="Cobertura temática por sector",
+        template="plotly_dark"
     )
+    theme_fig.update_layout(**dark_layout)
 
     scatter_fig = px.scatter(
         df.sample(min(5000, len(df)), random_state=42),
@@ -89,7 +122,9 @@ def build_figures(df):
             "days_since_update": "Días desde la última actualización de datos",
             "views": "Vistas",
         },
+        template="plotly_dark"
     )
+    scatter_fig.update_layout(**dark_layout)
 
     return {
         "hist": hist_fig,
@@ -107,6 +142,11 @@ def build_gap_table(df):
         columns=[{"name": col, "id": col} for col in gaps.columns],
         page_size=10,
         style_table={"overflowX": "auto"},
+        style_header=TABLE_HEADER_STYLE,
+        style_cell=TABLE_CELL_STYLE,
+        style_data_conditional=[
+            {'if': {'row_index': 'odd'}, 'backgroundColor': 'rgba(255, 255, 255, 0.08)'}
+        ]
     )
 
 
@@ -121,16 +161,25 @@ def build_cluster_outputs(df):
             columns=[
                 {"name": "Cluster", "id": "cluster_id"},
                 {"name": "Activos", "id": "assets"},
-                {"name": "Completitud Promedio", "id": "avg_completeness", "type": "numeric"},
+                {"name": "Completitud Promedio", "id": "avg_completeness", "type": "numeric", "format": {"specifier": ".1%"}},
                 {"name": "Mediana de Vistas", "id": "median_views", "type": "numeric"},
             ],
             style_cell={"textAlign": "center"},
+            style_header=TABLE_HEADER_STYLE,
+            style_cell_conditional=[
+                 {'if': {'column_id': 'cluster_id'}, 'textAlign': 'left', 'color': '#1EC9BD', 'fontWeight': 'bold'}
+            ],
+            style_data={
+                'backgroundColor': 'rgba(255, 255, 255, 0.05)',
+                'color': 'white',
+                'borderBottom': '1px solid rgba(255, 255, 255, 0.1)'
+            },
             style_data_conditional=[
-                {"if": {"column_id": "avg_completeness"}, "backgroundColor": "#e0f7fa"}
+                {"if": {"column_id": "avg_completeness"}, "color": "#A8E6CF", "fontWeight": "bold"}
             ],
         )
         cluster_keywords = "\n".join(
-            f"- Cluster {idx + 1}: {keywords}"
+            f"- **Cluster {idx}**: {keywords}"
             for idx, keywords in enumerate(cluster_summary.keywords)
         )
     return cluster_summary, cluster_table, cluster_keywords, cluster_message

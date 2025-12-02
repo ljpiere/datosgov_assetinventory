@@ -5,6 +5,14 @@ El módulo expone funciones reutilizables para:
 * Limpieza y enriquecimiento del CSV
 * Cálculo de métricas para los objetivos específicos OE1-OE3
 * Ejecución de un modelo ML sencillo (clustering por temática)
+
+# NOTA IMPORTANTE:
+Si falla al ejecutar por gpu revisar:
+- Versión cuda compatible con la grafica
+- Versión BitsAndBytes compatible con la grafica
+- Versión torch torchvision torchaudio compatibles con la grafica
+
+Esto puede variar dependiendo la gráfica y sus drivers.
 """
 
 from __future__ import annotations
@@ -14,7 +22,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 from ctransformers import AutoModelForCausalLM as CAutoModel
-
+import string 
 import numpy as np
 import pandas as pd
 import re
@@ -31,7 +39,21 @@ from typing import Dict, List, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-login()
+
+
+def ensure_hf_login() -> None:
+    """Intenta login no interactivo usando variable de entorno HF_TOKEN o HUGGINGFACEHUB_API_TOKEN."""
+    token = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    if not token:
+        # Sin token no intentamos login para evitar prompt interactivo en contenedores.
+        return
+    try:
+        login(token=token, add_to_git_credential=False)
+    except Exception as exc:  # pragma: no cover - solo loguea
+        print(f"Aviso: no se pudo iniciar sesion en HuggingFace: {exc}")
+
+
+ensure_hf_login()
 
 try:
     from sklearn.cluster import KMeans
@@ -108,6 +130,8 @@ MARCO DE INTEROPERABILIDAD:
 Dominios: Político-Legal, Organizacional, Semántico (Lenguaje común), Técnico.
 """
 
+
+URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
 
 METADATA_FIELDS = [
     "name",
@@ -922,14 +946,17 @@ Selecciona otra fila en la tabla para actualizar el reporte; se listan hasta {le
 # CLASE ORBIT
 
 class OrbiAssistant:
-    def __init__(self, model_id="google/gemma-2-2b-it",alternative="bartowski/gemma-2-2b-it-GGUF"):
+    def __init__(self, model_id="google/gemma-2-2b-it"):
         # carga el modelo gemma
-        print("\nInicializando ORBIT...")
+        print("\nINICIANDO MANABA...")
+        project_path = os.path.dirname(os.path.abspath(__file__))
+        self.local_models_path = os.path.join(project_path, "modelos_cache")
+        os.makedirs(self.local_models_path, exist_ok=True) 
 
-        # Cargar Base de Conocimiento (RAG)
+        # Cargar Base de Conocimiento RAG
         print("Indexando Guía de Calidad...")
         self.guide_chunks = [c.strip() for c in GUIA_CALIDAD_TEXT.split('\n\n') if c.strip()]
-        self.embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
+        self.embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu',cache_folder=self.local_models_path)
         self.guide_embeddings = self.embedder.encode(self.guide_chunks, convert_to_tensor=True)
 
         # Cargar Inventario de Datos
@@ -947,47 +974,31 @@ class OrbiAssistant:
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=torch.float16
             )
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id,cache_dir=self.local_models_path)
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 quantization_config=bnb_config,
                 device_map="auto",
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
+                cache_dir=self.local_models_path
             )
             print("Modelo cargado exitosamente en GPU.")
             
         except Exception as e:
-            print(f"Advertencia: Falló la carga en GPU/4-bit. Causa: {e}")
-            try:
-                self.model = CAutoModel.from_pretrained(
-                    alternative,
-                    model_file="gemma-2-2b-it-Q4_K_M.gguf", 
-                    model_type="gemma",
-                    gpu_layers=50, # Pasa todo a la GPU
-                    context_length=2048
-                )
-                
-                # 2. Cargamos el Tokenizer de HuggingFace por separado
-                # (ctransformers tiene el suyo, pero para compatibilidad con tu código usamos este)
-                self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-                
-                print("Modelo cargado exitosamente en GPU (Modo GGUF).")
-            except Exception as e:
                 print(f"Advertencia: Falló la carga en GPU. Causa: {e}")
                 print("Cambiando a modo CPU...")
                 try:
-                    # Carga estándar en CPU
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_id,cache_dir=self.local_models_path)
                     self.model = AutoModelForCausalLM.from_pretrained(
                         model_id,
-                        device_map="cpu", # Forzamos CPU
-                        torch_dtype=torch.float32
+                        device_map="cpu",
+                        torch_dtype=torch.float32,
+                        cache_dir=self.local_models_path
                     )
                     print(">>> Modelo cargado exitosamente en modo CPU.")
                 except Exception as e2:
                     print(f"Error crítico: No se pudo cargar el modelo ni en GPU ni en CPU.")
                     print(f"Detalle del error: {e2}")
-                    # Aquí SÍ lanzamos el error porque fallaron ambos métodos
                     raise e2
 
     def _retrieve_guide_info(self, query):
@@ -999,25 +1010,34 @@ class OrbiAssistant:
 
         context = []
         for score, idx in zip(top_results.values, top_results.indices):
-            if score > 0.25: # Umbral de relevancia
+            if score > 0.25:
                 context.append(self.guide_chunks[idx])
         return "\n".join(context) if context else None
 
-    def _generate_response(self, system_prompt, user_query):
+    def _generate_response(self, system_prompt, user_query, history=[]):
+
+        # historial de conversacion
+        history_str = ""
+        if history:
+            # tomamos los ultimos 12 mensajes para no colapsar memoria
+            recent_history = history[-12:]
+            for msg in recent_history:
+                role = "model" if msg['role'] == "orbit" else "user"
+                history_str += f"<start_of_turn>{role}\n{msg['content']}<end_of_turn>\n"
         """Genera respuesta con Gemma."""
-        prompt = f"""<start_of_turn>user
+        prompt = f"""{history_str}<start_of_turn>user
 {system_prompt}
 
-PREGUNTA DEL USUARIO:
+ENTRADA DEL USUARIO:
 {user_query}
 
-Responde de forma clara y útil como Orbit.<end_of_turn>
+IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas para resaltar cosas importantes y mantén un tono protector y curioso.<end_of_turn>
 <start_of_turn>model
 """     
         device = self.model.device 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
         with torch.no_grad():
-            outputs = self.model.generate(**inputs, max_new_tokens=600, temperature=0.3)
+            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=1.0)
         return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1]
 
     def chat(self, message, history):
@@ -1027,28 +1047,43 @@ Responde de forma clara y útil como Orbit.<end_of_turn>
 
         msg_lower = message.lower()
 
-        # 1. Router: ¿Es sobre Calidad/Errores?
+        msg_clean = msg_lower.translate(str.maketrans('', '', string.punctuation))
+        greetings = ["hola", "buenos dias", "buenas tardes", "buenas noches", "buenas", "que tal", "hi", "hello", "holis", "oli"]
+        
+        # Si el mensaje es solo un saludo o un saludo corto ya se presento
+        is_greeting = msg_clean in greetings or (len(msg_clean.split()) <= 3 and "hola" in msg_clean)
+
+        if is_greeting:
+            sys_prompt = (
+                "Eres Manaba. YA te has presentado al inicio de la conversación, así que NO repitas tu nombre ni quién eres. "
+                "El usuario te está saludando de vuelta. "
+                "Responde con un sonido de oso feliz (como *Grrr* suave) o una frase corta y amable. "
+                "Invítalo directamente a rastrear un dato."
+            )
+            return self._generate_response(sys_prompt, message, history)
+
+        # ¿Es sobre Calidad o errores?
         quality_keywords = ["error", "err", "calidad", "criterio", "norma", "guía", "sello", "iso", "interoperabilidad"]
         if any(k in msg_lower for k in quality_keywords):
             context = self._retrieve_guide_info(message)
             if context:
-                sys_prompt = f"Eres Orbit, experto en calidad de datos del gobierno colombiano. Usa este contexto de la guía oficial:\n\n{context}"
-                return self._generate_response(sys_prompt, message)
+                sys_prompt = f"Eres Manaba, un oso de anteojos experto en calidad de datos del gobierno colombiano. Eres amable pero riguroso con la calidad. Usa este contexto:\n\n{context}"
+                return self._generate_response(sys_prompt, message, history)
             else:
-                return "No encontré ese tema específico en la Guía de Calidad. ¿Podrías darme el código de error (ej: ERR005) o el nombre del criterio?"
+                return "Grrr... he buscado en mi guía pero no encuentro ese tema específico sobre calidad. ¿Tienes el código del error (ej: ERR005)?"
 
-        # 2. ¿Es sobre Búsqueda de Datos?
+        # ¿Es sobre Búsqueda de Datos?
         # Por defecto, si no es calidad, asumimos que busca datos
         results = search_inventory(message, self.inventory_df)
 
         if not results.empty:
             # Construir contexto del inventario
-            data_context = "He encontrado los siguientes conjuntos de datos en datos.gov.co:\n"
+            data_context = "He rastreado estos datasets en el bosque de datos:\n"
             for i, row in results.iterrows():
                 data_context += f"- Nombre: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Descripción: {str(row.get('Descripción', ''))[:100]}...\n  UID: {row.get('UID', 'N/A')}\n\n"
 
-            sys_prompt = f"Eres Orbit, un asistente de datos abiertos. El usuario busca información. Usa estos datasets encontrados para responder:\n\n{data_context}"
-            return self._generate_response(sys_prompt, message)
+            sys_prompt = f"Eres Manaba, el oso guardián de los datos abiertos. Ayuda al usuario a encontrar lo que busca usando estos hallazgos:\n\n{data_context}"
+            return self._generate_response(sys_prompt, message, history)
 
-        # 3. Conversación general
-        return self._generate_response("Eres Orbit, un asistente amable de datos abiertos de Colombia. Si no sabes la respuesta, sugiere buscar datos o consultar la guía de calidad.", message)
+        # Conversación general
+        return self._generate_response("Eres Manaba, un oso de anteojos amigable que vive en el ecosistema de datos de Colombia. Te gusta ayudar a la gente a encontrar y cuidar los datos.", message, history)

@@ -1,66 +1,66 @@
 # Pitch de 10 minutos – Inventario de Activos de Datos (MinTIC)
 
-Estructura sugerida para las diapositivas y notas para guiar la presentación de 10 minutos. La demo dura 4 minutos; el resto se reparte en los primeros 6 minutos.
+Base para la presentación en 10 minutos. La demo dura 4 minutos; los otros 6 minutos cubren contexto, valor y próximos pasos. Tono cercano y concreto.
 
 ## Slide 1 — Portada (0:30)
-- Título del proyecto, logo MinTIC y equipo.
-- Frase de valor: inventario vivo y confiable de datos públicos para acelerar decisiones.
+- Título, logo MinTIC, nombres del equipo.
+- Idea fuerza: “Un inventario vivo y confiable de datos públicos para decidir más rápido”.
 
 ## Slide 2 — Qué pidió el Ministerio TIC (0:50)
-- Reto: consolidar y evaluar activos de datos de entidades públicas.
-- Necesidad: visibilidad centralizada, trazabilidad de fuentes y calidad antes de publicar.
-- Expectativa: herramienta operativa, reproducible y segura que soporte actualizaciones continuas.
+- Petición directa: consolidar y evaluar los activos de datos que publican las entidades.
+- Necesidad humana: “Queremos ver, en un solo lugar, qué tenemos, qué sirve y qué hay que corregir”.
+- Condición de producto: operable hoy, seguro, trazable y listo para crecer.
 
 ## Slide 3 — Complejidad del reto (1:00)
-- Heterogeneidad de fuentes (formatos, frecuencia, calidad).
-- Volumen y variabilidad: múltiples entidades y dominios.
-- Requerimientos de producto: transparencia, métricas comparables y experiencia sencilla para usuarios no técnicos.
+- Fuentes desordenadas: distintos formatos, frecuencias y calidades.
+- Mucha variación: múltiples entidades y dominios con reglas propias.
+- Producto exigente: métricas comparables, transparencia y experiencia simple para perfiles no técnicos.
 
 ## Slide 4 — Alcance y conjuntos de datos (0:50)
-- Qué cubrimos en esta fase: inventario, evaluación de calidad, panel interactivo.
-- Conjuntos de datos incluidos: lista con nombre/fuente/periodicidad (reemplazar con los reales).
-- Lo que quedó fuera (para backlog) para gestionar expectativas.
+- Entregables de esta fase: inventario central, evaluación de calidad y tablero interactivo.
+- Conjuntos incluidos: lista breve con nombre/fuente/periodicidad (reemplazar con reales).
+- Delimitación: qué quedó fuera y pasa a backlog para no inflar expectativas.
 
 ## Slide 5 — Mejora de la calidad de datos (1:00)
 - Pipeline de limpieza: validaciones de esquema, duplicados, tipos y consistencia temporal.
-- Reglas de calidad configurables y bitácora de cambios.
-- Métricas de salud que se reflejan en el tablero (completitud, unicidad, validez, actualidad).
+- Reglas configurables y bitácora de cambios para auditar ajustes.
+- Métricas visibles en el tablero: completitud, unicidad, validez y actualidad.
 
 ## Slide 6 — Volumen y variables (0:50)
-- Número de variables trabajadas: `<completar>`.
-- Volumen de registros procesados: `<completar>` y frecuencia de actualización.
-- Número de fuentes de datos consultadas: `<completar>`.
-- Breve tabla/viñetas con las principales entidades y formatos (CSV/JSON/API).
+- Número de variables trabajadas: 57
+- Volumen de registros procesados y frecuencia: 49,2K por consulta a la API.
+- Número de fuentes consultadas: Datos propios abiertos proporcionados por el MINTIC.
+- Viñetas con entidades y formatos (CSV/JSON/API) para dar tangibilidad.
 
 ## Slide 7 — Arquitectura y flujo (0:50)
-- Ingesta → validación/limpieza → normalización → almacenamiento → visualización.
-- Tecnologías clave del proyecto (ej.: Python, pandas, Dash/Plotly, etc.).
-- Cómo se automatiza la actualización (jobs programados, scripts reproducibles).
+- Camino claro: ingesta → validación/limpieza → normalización → almacenamiento → visualización.
+- Tecnologías clave (ej.: Python, pandas, Dash/Plotly) y cómo se automatiza (jobs programados).
+- Mensaje humano: “Lo dejamos listo para operar y para que cualquier equipo pueda continuarlo”.
 
 ## Slide 8 — Ventajas para MinTIC (0:50)
-- Visibilidad unificada con trazabilidad y métricas de calidad.
-- Reducción de tiempo para auditar y preparar datos antes de publicarlos.
-- Base para priorizar políticas de datos y detectar brechas de información.
-- Extensible: agregar nuevas fuentes o reglas sin reescribir el pipeline.
+- Visibilidad unificada con trazabilidad y métricas accionables.
+- Menos tiempo en limpiar, más tiempo en decidir qué publicar o priorizar.
+- Base para priorizar políticas y detectar brechas de información.
+- Extensible: agregar nuevas fuentes o reglas sin rehacer el pipeline.
 
 ## Slide 9 — Demo (4:00)
-- Video de 4 minutos. Guion sugerido:
-  1) Apertura (10s): “Mostraremos el tablero que consolida los activos de datos y su salud”.
-  2) Vista general (40s): panel principal con KPIs de cantidad de datasets, calidad promedio, fuentes activas.
-  3) Navegación por catálogo (40s): filtrar por entidad y dominio; ver metadatos y estado de calidad.
-  4) Calidad a nivel de dataset (60s): abrir un dataset, mostrar validaciones aplicadas, porcentaje de celdas válidas, duplicados, fechas faltantes.
-  5) Línea de tiempo/actualización (40s): mostrar cuándo se actualizó por última vez y cómo se programan nuevas corridas.
-  6) Exportar/descargar (30s): enseñar cómo obtener el dataset limpio o el reporte de calidad.
-  7) Cierre (20s): “En minutos se entiende qué datos sirven, cuáles necesitan corrección y qué entidad es responsable”.
+- Guion sugerido:
+  1) Apertura (10s): “Aquí está el tablero que junta los activos de datos y su salud”.
+  2) Vista general (40s): KPIs de datasets, calidad promedio, fuentes activas.
+  3) Catálogo (40s): filtrar por entidad/dominio; ver metadatos y estado de calidad.
+  4) Calidad de un dataset (60s): validaciones aplicadas, % de celdas válidas, duplicados, fechas faltantes.
+  5) Línea de tiempo (40s): última actualización y programación de nuevas corridas.
+  6) Exportar/descargar (30s): dataset limpio o reporte de calidad.
+  7) Cierre (20s): “En minutos sabemos qué datos sirven, cuáles corregir y quién es responsable”.
 
 ## Slide 10 — Cierre y próximos pasos (0:30)
-- Lecciones aprendidas y principales riesgos mitigados.
-- Próximos incrementos: nuevas fuentes, más reglas de calidad, alertas automáticas.
+- Lecciones aprendidas y riesgos mitigados.
+- Próximos incrementos: nuevas fuentes, más reglas, alertas automáticas.
 - Llamado a acción: definir ciclo de adopción con equipos de datos de las entidades.
 
-## Notas para el discurso final (post-demo)
-- “Este proyecto entrega al MinTIC un inventario vivo de activos de datos, con trazabilidad y métricas de calidad, permitiendo decidir rápido qué datasets publicar o priorizar”.
-- “Automatizamos la ingesta y validación para reducir el tiempo que hoy se invierte en limpieza manual”.
-- “El tablero deja claro quién provee qué datos, su estado de salud y cómo evolucionan en el tiempo”.
-- “Es una base extensible: podemos sumar nuevas fuentes y reglas sin rehacer el pipeline”.
-- “El valor inmediato es transparencia y confianza; el valor a mediano plazo es acelerar políticas públicas basadas en datos confiables”.
+## Discurso sugerido (para cerrar la demo)
+- “El Ministerio nos pidió algo muy concreto: saber qué datos hay, qué tan buenos son y cómo usarlos sin perder tiempo. Hoy lo pueden ver en un solo tablero”.
+- “Automatizamos la ingesta y la validación. Eso recorta horas de limpieza manual y reduce el margen de error humano”.
+- “Cada dataset tiene dueño y estado de salud visible. Sabemos qué funciona, qué corregir y en qué orden priorizar”.
+- “El sistema es vivo: podemos sumar nuevas fuentes y reglas sin volver a empezar. Solo se enchufa y corre”.
+- “Lo que ganamos hoy es transparencia y confianza; lo que ganamos mañana es velocidad para lanzar políticas basadas en datos confiables”.

@@ -39,6 +39,7 @@ from typing import Dict, List, Optional
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from context import GOV_ACRONYMS, GUIA_CALIDAD_TEXT
 
 
 def ensure_hf_login() -> None:
@@ -65,72 +66,9 @@ except ImportError:  # pragma: no cover - se maneja en runtime
 # Guardará el dataframe localmente para evitar recargas innecesarias.
 CACHE_DIR = Path("dataframe")
 CACHE_FILE = CACHE_DIR / "inventory_cache.pkl"
-
-URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
-
-
-GUIA_CALIDAD_TEXT = """
-TITULO: Guía de estándares de CALIDAD E INTEROPERABILIDAD de los Datos Abiertos (MinTIC Colombia)
-
-INTRODUCCION:
-Para que los datos abiertos generen valor social y económico, deben cumplir criterios de calidad e interoperabilidad.
-La norma base es ISO/IEC 25012. Dimensiones clave: Precisión, Integridad, Validez, Consistencia, Unicidad, Actualidad.
-
-CRITERIOS DE CALIDAD (17 Criterios):
-1. Accesibilidad: Sin requisitos de registro, contraseñas o software especial.
-2. Actualidad: Los datos reflejan el estado más reciente según su periodicidad.
-3. Completitud: Todos los campos obligatorios están diligenciados (ningún campo crítico en blanco).
-4. Comprensibilidad: Datos interpretables, encabezados claros, glosarios.
-5. Conformidad: Cumplimiento de estándares (plantillas MinTIC).
-6. Confidencialidad: No publicar datos personales o sensibles sin anonimizar (Ley 1581 de 2012).
-7. Consistencia: Datos coherentes y sin contradicción (misma codificación).
-8. Credibilidad: Fuente oficial declarada y responsable visible.
-9. Disponibilidad: Datos en línea 24/7 sin caídas.
-10. Eficiencia: Plataforma permite descargas con buen rendimiento.
-11. Exactitud: Datos diligenciados correctamente (sintáctica y semántica).
-12. Portabilidad: Formatos abiertos (CSV, JSON) sin bloqueos.
-13. Precisión: Nivel de desagregación adecuado al original.
-14. Recuperabilidad: Copias de seguridad y control de versiones.
-15. Relevancia: Datos útiles para la toma de decisiones.
-16. Trazabilidad: Histórico de cambios y fechas documentadas.
-17. Unicidad: Sin registros duplicados (filas o columnas).
-
-ERRORES COMUNES Y CÓDIGOS (Validación):
-- ERR001 (Metadata errada): Título o descripción mal nombrados o poco claros.
-- ERR002 (Metadata vacía): Falta completar campos obligatorios en la metadata.
-- ERR003 (Entidad): El nombre de usuario no está vinculado a la entidad oficial.
-- ERR004 (Sin filas): El conjunto de datos está vacío (0 registros).
-- ERR005 (Pocas filas): Menos de 50 registros (afecta reutilización). Excepción: listados completos pequeños.
-- ERR005_01 (Agregado): Datos con pocas filas y además agregados (totales), no desagregados.
-- ERR007 (Filas vacías): Conjunto con campos vacíos o basura.
-- ERR008 (Columna única): El dataset tiene una sola columna.
-- ERR008_1 (Pocas columnas): Menos de 3 columnas.
-- ERR008_2 (Columnas mal nombradas): Nombres como "Unnamed Column", "Column1".
-- ERR009 (Geolocalización): Falta latitud/longitud cuando hay direcciones.
-- ERR010 (Enlace inválido): Link externo roto o apunta a un PDF/DOC (no estructurado).
-- ERR011 (Clasificación): Datos divididos por periodos que deberían estar unidos.
-- ERR012 (Subconjunto maestro): Publicar fragmentos de datos que ya existen en un dataset nacional (ej: SECOP, ICFES).
-- ERR013 (Mal cargado): Error técnico en la carga.
-- ERR015 (Desactualizado): La fecha actual supera la frecuencia de actualización prometida.
-- ERR017 (Enlace roto): URL externa no funciona.
-- ERR018 (Agregaciones): El dataset presenta totales en lugar de datos crudos.
-- ITA_1, ITA_2, ITA_3: Errores relacionados con la Ley de Transparencia (activos de información, esquemas de publicación).
-
-SELLOS DE CALIDAD:
-- Sello 0: No cumple requisitos mínimos.
-- Sello 1: Cumple criterios básicos (Actualidad 10, Consistencia/Completitud > 8, Licencia válida).
-- Sello 2: Cumple Sello 1 + Formatos estándar + Incentivo de uso (vistas/descargas).
-- Sello 3 (Máximo): Documentación completa (URL), Incentivo de uso avanzado, Mejora continua.
-
-POTENCIAL DE USO (CTR):
-Se mide con el CTR (Click Through Rate) = Número de Descargas / Número de Vistas.
-Ayuda a identificar qué tan atractiva es la información.
-
-MARCO DE INTEROPERABILIDAD:
-Dominios: Político-Legal, Organizacional, Semántico (Lenguaje común), Técnico.
-"""
-
-
+# guardará el modelo localmente para evitar recargas innecesarias.
+CACHE_DIR_MODEL = "./model"
+# url de la API del inventario
 URL = "https://www.datos.gov.co/resource/uzcf-b9dh.json"
 
 METADATA_FIELDS = [
@@ -946,7 +884,7 @@ Selecciona otra fila en la tabla para actualizar el reporte; se listan hasta {le
 # CLASE ORBIT
 
 class OrbiAssistant:
-    def __init__(self, model_id="google/gemma-2-2b-it"):
+    def __init__(self, model_id="NicolasRodriguez/manaba_gemma_2_2b"):
         # carga el modelo gemma
         print("\nINICIANDO MANABA...")
 
@@ -965,18 +903,20 @@ class OrbiAssistant:
         try:
             # GPU con BitsAndBytes 
             print("Intentando carga con GPU (4-bit)...")
+            # compresion de 4 bits para GPUs con poca memoria
             bnb_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_use_double_quant=True,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_compute_dtype=torch.float16
             )
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id,cache_dir=CACHE_DIR_MODEL)
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_id,
                 quantization_config=bnb_config,
                 device_map="auto",
-                low_cpu_mem_usage=True
+                low_cpu_mem_usage=True,
+                cache_dir=CACHE_DIR_MODEL
             )
             print("Modelo cargado exitosamente en GPU.")
             
@@ -984,11 +924,12 @@ class OrbiAssistant:
                 print(f"Advertencia: Falló la carga en GPU. Causa: {e}")
                 print("Cambiando a modo CPU...")
                 try:
-                    self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+                    self.tokenizer = AutoTokenizer.from_pretrained(model_id,cache_dir=CACHE_DIR_MODEL)
                     self.model = AutoModelForCausalLM.from_pretrained(
                         model_id,
                         device_map="cpu",
-                        torch_dtype=torch.float32
+                        torch_dtype=torch.float32,
+                        cache_dir=CACHE_DIR_MODEL
                     )
                     print(">>> Modelo cargado exitosamente en modo CPU.")
                 except Exception as e2:
@@ -1009,76 +950,130 @@ class OrbiAssistant:
                 context.append(self.guide_chunks[idx])
         return "\n".join(context) if context else None
 
-    def _generate_response(self, system_prompt, user_query, history=[]):
+    def _expand_acronyms(self, text):
+        """Mejora la consulta expandiendo siglas conocidas."""
+        words = text.lower().split()
+        expanded_query = []
+        found_meaning = None
+        
+        for w in words:
+            # Limpiar puntuación
+            clean_w = w.strip(string.punctuation)
+            if clean_w in GOV_ACRONYMS:
+                meaning = GOV_ACRONYMS[clean_w]
+                expanded_query.append(f"{w} ({meaning})")
+                found_meaning = meaning
+            else:
+                expanded_query.append(w)
+        
+        return " ".join(expanded_query), found_meaning
 
-        # historial de conversacion
+    def _generate_response(self, system_instruction, user_query, context_data="", history=[]):
+        """
+        Genera respuesta con Gemma usando un prompt estructurado para evitar alucinaciones.
+        """
         history_str = ""
         if history:
-            # tomamos los ultimos 12 mensajes para no colapsar memoria
-            recent_history = history[-12:]
+            recent_history = history[-6:]
             for msg in recent_history:
                 role = "model" if msg['role'] == "orbit" else "user"
-                history_str += f"<start_of_turn>{role}\n{msg['content']}<end_of_turn>\n"
-        """Genera respuesta con Gemma."""
-        prompt = f"""{history_str}<start_of_turn>user
-{system_prompt}
+                # Limpiamos el contenido histórico para no pasar contexto basura
+                content = msg['content'].replace("\n", " ")[:200] 
+                history_str += f"<start_of_turn>{role}\n{content}<end_of_turn>\n"
 
-ENTRADA DEL USUARIO:
+        # Prompt
+        prompt = f"""<start_of_turn>user
+Eres Manaba, un oso de anteojos experto en Datos Abiertos de Colombia.
+Recuerda ya saludaste al usuario.
+Responde al usuario con un sonido de oso (*Grrr*) 
+Tu misión es ayudar a encontrar datasets o explicar normas de calidad.
+NO inventes significados de palabras. Si te dan contexto de datos, ÚSALO.
+
+CONTEXTO DE DATOS ENCONTRADOS:
+{context_data if context_data else "No se encontraron datasets específicos en esta búsqueda."}
+
+INSTRUCCIÓN:
+{system_instruction}
+
+PREGUNTA DEL USUARIO:
 {user_query}
 
-IMPORTANTE: Responde como Manaba (un oso de anteojos). Sé breve, usa negrillas para resaltar cosas importantes y mantén un tono protector y curioso.<end_of_turn>
+Responde brevemente como un oso amable.<end_of_turn>
 <start_of_turn>model
 """     
         device = self.model.device 
         inputs = self.tokenizer(prompt, return_tensors="pt").to(device)
+        
         with torch.no_grad():
-            outputs = self.model.generate(**inputs, max_new_tokens=32768, temperature=0.3)
-        return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1]
+            outputs = self.model.generate(**inputs, max_new_tokens=4096, temperature=0.2, repetition_penalty=1.1)
+            
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True).split("model\n")[-1].strip()
 
     def chat(self, message, history):
-        """Función principal que conecta con Gradio."""
+        """Función principal."""
         gc.collect()
         torch.cuda.empty_cache()
 
         msg_lower = message.lower()
-
         msg_clean = msg_lower.translate(str.maketrans('', '', string.punctuation))
-        greetings = ["hola", "buenos dias", "buenas tardes", "buenas noches", "buenas", "que tal", "hi", "hello", "holis", "oli"]
         
-        # Si el mensaje es solo un saludo o un saludo corto ya se presento
-        is_greeting = msg_clean in greetings or (len(msg_clean.split()) <= 3 and "hola" in msg_clean)
+        # SALUDO INICIAL
+        greetings = ["hola", "buenos dias", "buenas", "hi", "hello", "holis"]
+        is_greeting = msg_clean in greetings or (len(msg_clean.split()) <= 2 and "hola" in msg_clean)
 
         if is_greeting:
-            sys_prompt = (
-                "Eres Manaba. YA te has presentado al inicio de la conversación, así que NO repitas tu nombre ni quién eres. "
-                "El usuario te está saludando de vuelta. "
-                "Responde con un sonido de oso feliz (como *Grrr* suave) o una frase corta y amable. "
-                "Invítalo directamente a rastrear un dato."
+            return self._generate_response(
+                "pregúntale qué dato público de Colombia busca hoy.", 
+                message, 
+                "",
+                history
             )
-            return self._generate_response(sys_prompt, message, history)
 
-        # ¿Es sobre Calidad o errores?
+        # NORMATIVA DE CALIDAD
         quality_keywords = ["error", "err", "calidad", "criterio", "norma", "guía", "sello", "iso", "interoperabilidad"]
         if any(k in msg_lower for k in quality_keywords):
             context = self._retrieve_guide_info(message)
             if context:
-                sys_prompt = f"Eres Manaba, un oso de anteojos experto en calidad de datos del gobierno colombiano. Eres amable pero riguroso con la calidad. Usa este contexto:\n\n{context}"
-                return self._generate_response(sys_prompt, message, history)
-            else:
-                return "Grrr... he buscado en mi guía pero no encuentro ese tema específico sobre calidad. ¿Tienes el código del error (ej: ERR005)?"
-
-        # ¿Es sobre Búsqueda de Datos?
-        # Por defecto, si no es calidad, asumimos que busca datos
-        results = search_inventory(message, self.inventory_df)
+                return self._generate_response(
+                    "Responde la duda técnica usando estrictamente el contexto de la guía proporcionado.", 
+                    message, 
+                    context, 
+                    history
+                )
+        
+        # Expansión de siglas
+        search_query, acronym_meaning = self._expand_acronyms(message)
+        
+        # Buscar en el inventario con la query expandida
+        # Usamos la query la expandida para asegurar match en TF-IDF
+        results = search_inventory(search_query, self.inventory_df, top_k=10)
 
         if not results.empty:
-            # Construir contexto del inventario
-            data_context = "He rastreado estos datasets en el bosque de datos:\n"
+            # Construir contexto enriquecido
+            data_context = ""
             for i, row in results.iterrows():
-                data_context += f"- Nombre: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Descripción: {str(row.get('Descripción', ''))[:100]}...\n  UID: {row.get('UID', 'N/A')}\n\n"
+                # Añadimos métricas clave para que el modelo pueda opinar sobre la calidad
+                data_context += f"- Dataset: {row['name']}\n  Entidad: {row.get('entidad', 'N/A')}\n  Actualizado hace: {int(row.get('days_since_update', 999))} días\n  UID: {row.get('UID', 'N/A')}\n"
+            
+            instruction = "El usuario busca datos. Dile que has encontrado estos recursos en el bosque de datos. Menciona el nombre de los primeros 3 datasets con su explicación, su uid y su entidad. Si alguno está muy desactualizado (más de 365 días), adviértelo amablemente."
+            
+            # Si detectamos una sigla, reforzamos el contexto
+            if acronym_meaning:
+                instruction += f" Nota: El usuario buscó '{message}', que entiendo como '{acronym_meaning}'."
 
-            sys_prompt = f"Eres Manaba, el oso guardián de los datos abiertos. Ayuda al usuario a encontrar lo que busca usando estos hallazgos:\n\n{data_context}"
-            return self._generate_response(sys_prompt, message, history)
+            return self._generate_response(instruction, message, data_context, history)
 
-        # Conversación general
-        return self._generate_response("Eres Manaba, un oso de anteojos amigable que vive en el ecosistema de datos de Colombia. Te gusta ayudar a la gente a encontrar y cuidar los datos.", message, history)
+        # No encontró datos
+        else:
+            # Si detectamos una sigla pero no hubo datos
+            if acronym_meaning:
+                fallback_msg = f"Grrr... busqué datos sobre **{acronym_meaning}** ({message}) pero no encontré nada específico en el inventario cargado. ¿Quizás intentar con la entidad (ej: Alcaldía de...)? 🐻"
+                return fallback_msg
+            
+            # Respuesta genérica controlada para evitar alucinaciones
+            return self._generate_response(
+                "No encontraste datasets exactos. Pide al usuario que sea más específico con la entidad o el tema. NO intentes adivinar qué significa la palabra si no la sabes.",
+                message,
+                "",
+                history
+            )

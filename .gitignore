@@ -35,3 +35,9 @@ google-services.json
 
 # Environment files
 .env
+
+# Model files
+*.pt
+*.safetensors
+*.pkl
+model/
